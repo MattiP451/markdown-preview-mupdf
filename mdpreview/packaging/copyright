@@ -19,7 +19,7 @@ Comment: The compiled plugin statically links MuPDF @MUPDF_VERSION@
  under the AGPL-3.0 or any later version. The notices for MuPDF's bundled
  third-party code and data (FreeType, HarfBuzz, cmark-gfm, lcms2, OpenJPEG,
  libjpeg, zlib, Brotli, MuJS, Gumbo, jbig2dec, extract, Adobe CMaps,
- URW++ fonts, hyphenation patterns) are in THIRD-PARTY-NOTICES.txt.
+ URW++, Noto and Charis SIL fonts, hyphenation patterns) are in THIRD-PARTY-NOTICES.txt.
  This software is based in part on the work of the Independent JPEG Group.
  Portions of this software are copyright (c) @FTYEAR@ The FreeType Project
  (www.freetype.org). All rights reserved.
