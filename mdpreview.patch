@@ -462,12 +462,13 @@ index 0000000..d159169
 +Public License instead of this License.
 diff --git a/mdpreview/ChangeLog b/mdpreview/ChangeLog
 new file mode 100644
-index 0000000..1baafda
+index 0000000..db6bde8
 --- /dev/null
 +++ b/mdpreview/ChangeLog
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,22 @@
 +2026-10-28
 +
++ * Build MuPDF with -DTOFU_CJK only, to include the Noto symbol fonts.
 + * Copy: join lines that were only wrapped by the layout (soft wraps).
 +
 +2026-10-28
@@ -507,14 +508,14 @@ index 0000000..c0df77a
 +include $(top_srcdir)/build/vars.build.mk
 diff --git a/mdpreview/Makefile.standalone b/mdpreview/Makefile.standalone
 new file mode 100644
-index 0000000..0944b1b
+index 0000000..369c693
 --- /dev/null
 +++ b/mdpreview/Makefile.standalone
 @@ -0,0 +1,39 @@
 +# Build the plugin on its own, against the installed Geany and a MuPDF
 +# source tree that has been built with:
 +#
-+#   make HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
++#   make HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU_CJK" libs
 +#
 +# Usage:
 +#   make -f Makefile.standalone MUPDF=/path/to/mupdf
@@ -552,16 +553,19 @@ index 0000000..0944b1b
 +.PHONY: install uninstall clean
 diff --git a/mdpreview/NEWS b/mdpreview/NEWS
 new file mode 100644
-index 0000000..fd89387
+index 0000000..0103ead
 --- /dev/null
 +++ b/mdpreview/NEWS
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,27 @@
 +mdpreview 0.4 (2026-10-28)
 +
 + * Copying text no longer puts a line break wherever the preview wrapped
 +   a line. Paragraphs, headings, list items and quotes are copied as one
 +   line each, and wrapped lines in code blocks are rejoined; table cells
 +   and real line breaks keep theirs.
++ * MuPDF is now built with its Noto symbol fonts (-DTOFU_CJK instead of
++   -DTOFU -DTOFU_CJK), so characters such as U+25B6 are drawn instead of
++   empty boxes. The plugin grows from about 10 MB to 19 MB.
 +
 +mdpreview 0.3 (2026-10-28)
 +
@@ -582,10 +586,10 @@ index 0000000..fd89387
 + * First release.
 diff --git a/mdpreview/README b/mdpreview/README
 new file mode 100644
-index 0000000..3e5f439
+index 0000000..db7df68
 --- /dev/null
 +++ b/mdpreview/README
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,98 @@
 +Markdown Preview (MuPDF)
 +========================
 +
@@ -626,9 +630,14 @@ index 0000000..3e5f439
 +    git clone https://github.com/MattiP451/markdown-preview-mupdf.git
 +    cd mupdf
 +    make -j$(nproc) HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no \
-+         XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
++         XCFLAGS="-fPIC -DTOFU_CJK" libs
 +    cd ../markdown-preview-mupdf/mdpreview
 +    make -f Makefile.standalone MUPDF=../../mupdf/
++
++-DTOFU_CJK leaves out MuPDF's CJK fonts. The Noto symbol fonts stay in, so
++characters such as a right-pointing triangle are drawn; the plugin is about
++19 MB. Adding -DTOFU would make it about 10 MB, but symbols would then show
++as empty boxes.
 +
 +If you built MuPDF before without -fPIC, run "make clean" in the mupdf
 +folder first and build it again; the makefile does not notice the changed
@@ -1459,10 +1468,10 @@ index 0000000..dba13ed
 +<http://www.gnu.org/licenses/>.
 diff --git a/mdpreview/packaging/THIRD-PARTY-NOTICES.txt b/mdpreview/packaging/THIRD-PARTY-NOTICES.txt
 new file mode 100644
-index 0000000..9e8e85d
+index 0000000..0c79e54
 --- /dev/null
 +++ b/mdpreview/packaging/THIRD-PARTY-NOTICES.txt
-@@ -0,0 +1,1418 @@
+@@ -0,0 +1,1624 @@
 +THIRD-PARTY NOTICES for geany-plugin-mdpreview
 +==============================================
 +
@@ -1471,6 +1480,9 @@ index 0000000..9e8e85d
 +This file reproduces their licence notices, as most of those licences require
 +for binary redistribution. It was generated from that MuPDF source tree with
 +packaging/gen-notices.sh.
++
++Build assumed: MuPDF built with XCFLAGS="-fPIC -DTOFU_CJK" (all Noto fonts
++and Charis SIL included, CJK fonts left out).
 +
 +Overall: the plugin source is GPL-2.0-or-later, MuPDF is AGPL-3.0-or-later,
 +so the compiled plugin is distributed under the AGPL-3.0 (see AGPL-3.0.txt).
@@ -1492,8 +1504,10 @@ index 0000000..9e8e85d
 + 13.  extract ....................................... AGPL-3.0-or-later
 + 14.  Adobe CMap resources .......................... BSD-3-Clause
 + 15.  URW++ base-35 fonts ........................... OFL-1.1
-+ 16.  tex-hyphen hyphenation patterns ............... MIT / permissive
-+ 17.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
++ 16.  Noto fonts (Google) ........................... OFL-1.1
++ 17.  Charis SIL font ............................... OFL-1.1
++ 18.  tex-hyphen hyphenation patterns ............... MIT / permissive
++ 19.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
 +
 +
 +================================================================
@@ -2301,7 +2315,208 @@ index 0000000..9e8e85d
 +
 +
 +================================================================
-+16. tex-hyphen hyphenation patterns
++16. Noto fonts (Google)
++
++The non-CJK Noto fonts (symbols, math, music, emoji and the per-script
++fonts) are built in as fallback fonts. Copyright (c) The Noto Project Authors
++and Google LLC; every font file carries its own copyright string. The CJK
++fonts are not included in this build.
++Used under the SIL Open Font License, Version 1.1:
++
++This Font Software is licensed under the SIL Open Font License,
++Version 1.1.
++
++This license is copied below, and is also available with a FAQ at:
++http://scripts.sil.org/OFL
++
++-----------------------------------------------------------
++SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
++-----------------------------------------------------------
++
++PREAMBLE
++The goals of the Open Font License (OFL) are to stimulate worldwide
++development of collaborative font projects, to support the font
++creation efforts of academic and linguistic communities, and to
++provide a free and open framework in which fonts may be shared and
++improved in partnership with others.
++
++The OFL allows the licensed fonts to be used, studied, modified and
++redistributed freely as long as they are not sold by themselves. The
++fonts, including any derivative works, can be bundled, embedded,
++redistributed and/or sold with any software provided that any reserved
++names are not used by derivative works. The fonts and derivatives,
++however, cannot be released under any other type of license. The
++requirement for fonts to remain under this license does not apply to
++any document created using the fonts or their derivatives.
++
++DEFINITIONS
++"Font Software" refers to the set of files released by the Copyright
++Holder(s) under this license and clearly marked as such. This may
++include source files, build scripts and documentation.
++
++"Reserved Font Name" refers to any names specified as such after the
++copyright statement(s).
++
++"Original Version" refers to the collection of Font Software
++components as distributed by the Copyright Holder(s).
++
++"Modified Version" refers to any derivative made by adding to,
++deleting, or substituting -- in part or in whole -- any of the
++components of the Original Version, by changing formats or by porting
++the Font Software to a new environment.
++
++"Author" refers to any designer, engineer, programmer, technical
++writer or other person who contributed to the Font Software.
++
++PERMISSION & CONDITIONS
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of the Font Software, to use, study, copy, merge, embed,
++modify, redistribute, and sell modified and unmodified copies of the
++Font Software, subject to the following conditions:
++
++1) Neither the Font Software nor any of its individual components, in
++Original or Modified Versions, may be sold by itself.
++
++2) Original or Modified Versions of the Font Software may be bundled,
++redistributed and/or sold with any software, provided that each copy
++contains the above copyright notice and this license. These can be
++included either as stand-alone text files, human-readable headers or
++in the appropriate machine-readable metadata fields within text or
++binary files as long as those fields can be easily viewed by the user.
++
++3) No Modified Version of the Font Software may use the Reserved Font
++Name(s) unless explicit written permission is granted by the
++corresponding Copyright Holder. This restriction only applies to the
++primary font name as presented to the users.
++
++4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
++Software shall not be used to promote, endorse or advertise any
++Modified Version, except to acknowledge the contribution(s) of the
++Copyright Holder(s) and the Author(s) or with their explicit written
++permission.
++
++5) The Font Software, modified or unmodified, in part or in whole,
++must be distributed entirely under this license, and must not be
++distributed under any other license. The requirement for fonts to
++remain under this license does not apply to any document created using
++the Font Software.
++
++TERMINATION
++This license becomes null and void if any of the above conditions are
++not met.
++
++DISCLAIMER
++THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
++OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
++COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
++DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
++OTHER DEALINGS IN THE FONT SOFTWARE.
++
++
++================================================================
++17. Charis SIL
++
++This Font Software is Copyright (c) 1997-2014, SIL International (http://scripts.sil.org/)
++with Reserved Font Names "Charis" and "SIL".
++
++This Font Software is licensed under the SIL Open Font License, Version 1.1.
++This license is copied below, and is also available with a FAQ at:
++http://scripts.sil.org/OFL
++
++-----------------------------------------------------------
++SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
++-----------------------------------------------------------
++
++PREAMBLE
++The goals of the Open Font License (OFL) are to stimulate worldwide
++development of collaborative font projects, to support the font creation
++efforts of academic and linguistic communities, and to provide a free and
++open framework in which fonts may be shared and improved in partnership
++with others.
++
++The OFL allows the licensed fonts to be used, studied, modified and
++redistributed freely as long as they are not sold by themselves. The
++fonts, including any derivative works, can be bundled, embedded,
++redistributed and/or sold with any software provided that any reserved
++names are not used by derivative works. The fonts and derivatives,
++however, cannot be released under any other type of license. The
++requirement for fonts to remain under this license does not apply
++to any document created using the fonts or their derivatives.
++
++DEFINITIONS
++"Font Software" refers to the set of files released by the Copyright
++Holder(s) under this license and clearly marked as such. This may
++include source files, build scripts and documentation.
++
++"Reserved Font Name" refers to any names specified as such after the
++copyright statement(s).
++
++"Original Version" refers to the collection of Font Software components as
++distributed by the Copyright Holder(s).
++
++"Modified Version" refers to any derivative made by adding to, deleting,
++or substituting -- in part or in whole -- any of the components of the
++Original Version, by changing formats or by porting the Font Software to a
++new environment.
++
++"Author" refers to any designer, engineer, programmer, technical
++writer or other person who contributed to the Font Software.
++
++PERMISSION & CONDITIONS
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of the Font Software, to use, study, copy, merge, embed, modify,
++redistribute, and sell modified and unmodified copies of the Font
++Software, subject to the following conditions:
++
++1) Neither the Font Software nor any of its individual components,
++in Original or Modified Versions, may be sold by itself.
++
++2) Original or Modified Versions of the Font Software may be bundled,
++redistributed and/or sold with any software, provided that each copy
++contains the above copyright notice and this license. These can be
++included either as stand-alone text files, human-readable headers or
++in the appropriate machine-readable metadata fields within text or
++binary files as long as those fields can be easily viewed by the user.
++
++3) No Modified Version of the Font Software may use the Reserved Font
++Name(s) unless explicit written permission is granted by the corresponding
++Copyright Holder. This restriction only applies to the primary font name as
++presented to the users.
++
++4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
++Software shall not be used to promote, endorse or advertise any
++Modified Version, except to acknowledge the contribution(s) of the
++Copyright Holder(s) and the Author(s) or with their explicit written
++permission.
++
++5) The Font Software, modified or unmodified, in part or in whole,
++must be distributed entirely under this license, and must not be
++distributed under any other license. The requirement for fonts to
++remain under this license does not apply to any document created
++using the Font Software.
++
++TERMINATION
++This license becomes null and void if any of the above conditions are
++not met.
++
++DISCLAIMER
++THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
++OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
++COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
++DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
++OTHER DEALINGS IN THE FONT SOFTWARE.
++
++
++================================================================
++18. tex-hyphen hyphenation patterns
 +
 +Languages built in: bn de en es fr gu hi it kn mr pt ru ta te th tr 
 +Source: https://github.com/hyphenation/tex-hyphen. Licence header of each pattern set:
@@ -2878,12 +3093,12 @@ index 0000000..9e8e85d
 +
 +
 +================================================================
-+17. Artifex ICC colour profiles
++19. Artifex ICC colour profiles
 +
 +Copyright Artifex Software. Part of MuPDF, distributed under the AGPL-3.0-or-later.
 diff --git a/mdpreview/packaging/copyright b/mdpreview/packaging/copyright
 new file mode 100644
-index 0000000..5a89e96
+index 0000000..fdfb670
 --- /dev/null
 +++ b/mdpreview/packaging/copyright
 @@ -0,0 +1,66 @@
@@ -2908,7 +3123,7 @@ index 0000000..5a89e96
 + under the AGPL-3.0 or any later version. The notices for MuPDF's bundled
 + third-party code and data (FreeType, HarfBuzz, cmark-gfm, lcms2, OpenJPEG,
 + libjpeg, zlib, Brotli, MuJS, Gumbo, jbig2dec, extract, Adobe CMaps,
-+ URW++ fonts, hyphenation patterns) are in THIRD-PARTY-NOTICES.txt.
++ URW++, Noto and Charis SIL fonts, hyphenation patterns) are in THIRD-PARTY-NOTICES.txt.
 + This software is based in part on the work of the Independent JPEG Group.
 + Portions of this software are copyright (c) @FTYEAR@ The FreeType Project
 + (www.freetype.org). All rights reserved.
@@ -2955,10 +3170,10 @@ index 0000000..5a89e96
 +# this package, or for as long as the binary is distributed.
 diff --git a/mdpreview/packaging/gen-notices.sh b/mdpreview/packaging/gen-notices.sh
 new file mode 100644
-index 0000000..1061c4b
+index 0000000..5476583
 --- /dev/null
 +++ b/mdpreview/packaging/gen-notices.sh
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,145 @@
 +#!/bin/sh
 +# Regenerate THIRD-PARTY-NOTICES.txt from a MuPDF source tree.
 +# Usage: sh gen-notices.sh /path/to/mupdf > THIRD-PARTY-NOTICES.txt
@@ -2983,6 +3198,9 @@ index 0000000..1061c4b
 +for binary redistribution. It was generated from that MuPDF source tree with
 +packaging/gen-notices.sh.
 +
++Build assumed: MuPDF built with XCFLAGS="-fPIC -DTOFU_CJK" (all Noto fonts
++and Charis SIL included, CJK fonts left out).
++
 +Overall: the plugin source is GPL-2.0-or-later, MuPDF is AGPL-3.0-or-later,
 +so the compiled plugin is distributed under the AGPL-3.0 (see AGPL-3.0.txt).
 +All components below are compatible with that.
@@ -3003,8 +3221,10 @@ index 0000000..1061c4b
 + 13.  extract ....................................... AGPL-3.0-or-later
 + 14.  Adobe CMap resources .......................... BSD-3-Clause
 + 15.  URW++ base-35 fonts ........................... OFL-1.1
-+ 16.  tex-hyphen hyphenation patterns ............... MIT / permissive
-+ 17.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
++ 16.  Noto fonts (Google) ........................... OFL-1.1
++ 17.  Charis SIL font ............................... OFL-1.1
++ 18.  tex-hyphen hyphenation patterns ............... MIT / permissive
++ 19.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
 +HDR
 +
 +sect "1. MuPDF"
@@ -3074,7 +3294,21 @@ index 0000000..1061c4b
 +sect "15. URW++ base-35 fonts (Nimbus, Dingbats, Standard Symbols PS)"
 +file "$M/resources/fonts/urw/OFL.txt"
 +
-+sect "16. tex-hyphen hyphenation patterns"
++sect "16. Noto fonts (Google)"
++cat <<EOT
++The non-CJK Noto fonts (symbols, math, music, emoji and the per-script
++fonts) are built in as fallback fonts. Copyright (c) The Noto Project Authors
++and Google LLC; every font file carries its own copyright string. The CJK
++fonts are not included in this build.
++Used under the SIL Open Font License, Version 1.1:
++
++EOT
++file "$M/resources/fonts/noto/COPYING"
++
++sect "17. Charis SIL"
++file "$M/resources/fonts/sil/OFL.txt"
++
++sect "18. tex-hyphen hyphenation patterns"
 +echo "Languages built in: $(unzip -Z1 "$M/resources/hyphen/hyph-std.zip" | tr '\n' ' ')"
 +echo "Source: https://github.com/hyphenation/tex-hyphen. Licence header of each pattern set:"
 +for l in $(unzip -Z1 "$M/resources/hyphen/hyph-std.zip"); do
@@ -3083,7 +3317,7 @@ index 0000000..1061c4b
 +  sed -n '/^% title/,/^% language/p;/^% licence/,/^% hyphenmins/p' "$f" | sed '$d' | sed 's/^% \{0,1\}//' | sed 's/[[:space:]]*$//'
 +done
 +
-+sect "17. Artifex ICC colour profiles"
++sect "19. Artifex ICC colour profiles"
 +echo "Copyright Artifex Software. Part of MuPDF, distributed under the AGPL-3.0-or-later."
 diff --git a/mdpreview/packaging/make-mupdf-source.sh b/mdpreview/packaging/make-mupdf-source.sh
 new file mode 100644
