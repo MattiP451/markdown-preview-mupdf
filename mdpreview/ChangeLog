@@ -1,5 +1,6 @@
 2026-10-28
 
+ * Build MuPDF with -DTOFU_CJK only, to include the Noto symbol fonts.
  * Copy: join lines that were only wrapped by the layout (soft wraps).
 
 2026-10-28
