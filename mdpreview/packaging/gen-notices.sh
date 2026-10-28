@@ -22,6 +22,9 @@ This file reproduces their licence notices, as most of those licences require
 for binary redistribution. It was generated from that MuPDF source tree with
 packaging/gen-notices.sh.
 
+Build assumed: MuPDF built with XCFLAGS="-fPIC -DTOFU_CJK" (all Noto fonts
+and Charis SIL included, CJK fonts left out).
+
 Overall: the plugin source is GPL-2.0-or-later, MuPDF is AGPL-3.0-or-later,
 so the compiled plugin is distributed under the AGPL-3.0 (see AGPL-3.0.txt).
 All components below are compatible with that.
@@ -42,8 +45,10 @@ Contents
  13.  extract ....................................... AGPL-3.0-or-later
  14.  Adobe CMap resources .......................... BSD-3-Clause
  15.  URW++ base-35 fonts ........................... OFL-1.1
- 16.  tex-hyphen hyphenation patterns ............... MIT / permissive
- 17.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
+ 16.  Noto fonts (Google) ........................... OFL-1.1
+ 17.  Charis SIL font ............................... OFL-1.1
+ 18.  tex-hyphen hyphenation patterns ............... MIT / permissive
+ 19.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
 HDR
 
 sect "1. MuPDF"
@@ -113,7 +118,21 @@ sed -n 's/^%%Copyright: \{0,1\}//p' "$M/resources/cmaps/90ms-RKSJ-H" | sed '/^-*
 sect "15. URW++ base-35 fonts (Nimbus, Dingbats, Standard Symbols PS)"
 file "$M/resources/fonts/urw/OFL.txt"
 
-sect "16. tex-hyphen hyphenation patterns"
+sect "16. Noto fonts (Google)"
+cat <<EOT
+The non-CJK Noto fonts (symbols, math, music, emoji and the per-script
+fonts) are built in as fallback fonts. Copyright (c) The Noto Project Authors
+and Google LLC; every font file carries its own copyright string. The CJK
+fonts are not included in this build.
+Used under the SIL Open Font License, Version 1.1:
+
+EOT
+file "$M/resources/fonts/noto/COPYING"
+
+sect "17. Charis SIL"
+file "$M/resources/fonts/sil/OFL.txt"
+
+sect "18. tex-hyphen hyphenation patterns"
 echo "Languages built in: $(unzip -Z1 "$M/resources/hyphen/hyph-std.zip" | tr '\n' ' ')"
 echo "Source: https://github.com/hyphenation/tex-hyphen. Licence header of each pattern set:"
 for l in $(unzip -Z1 "$M/resources/hyphen/hyph-std.zip"); do
@@ -122,5 +141,5 @@ for l in $(unzip -Z1 "$M/resources/hyphen/hyph-std.zip"); do
   sed -n '/^% title/,/^% language/p;/^% licence/,/^% hyphenmins/p' "$f" | sed '$d' | sed 's/^% \{0,1\}//' | sed 's/[[:space:]]*$//'
 done
 
-sect "17. Artifex ICC colour profiles"
+sect "19. Artifex ICC colour profiles"
 echo "Copyright Artifex Software. Part of MuPDF, distributed under the AGPL-3.0-or-later."
