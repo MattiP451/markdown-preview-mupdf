@@ -1,7 +1,7 @@
 # Build the plugin on its own, against the installed Geany and a MuPDF
 # source tree that has been built with:
 #
-#   make HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
+#   make HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU_CJK" libs
 #
 # Usage:
 #   make -f Makefile.standalone MUPDF=/path/to/mupdf
