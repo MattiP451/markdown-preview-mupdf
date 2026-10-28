@@ -38,9 +38,14 @@ linked into the plugin. Tested with MuPDF master (1.29.0) on Debian.
     git clone https://github.com/MattiP451/markdown-preview-mupdf.git
     cd mupdf
     make -j$(nproc) HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no \
-         XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
+         XCFLAGS="-fPIC -DTOFU_CJK" libs
     cd ../markdown-preview-mupdf/mdpreview
     make -f Makefile.standalone MUPDF=../../mupdf/
+
+-DTOFU_CJK leaves out MuPDF's CJK fonts. The Noto symbol fonts stay in, so
+characters such as a right-pointing triangle are drawn; the plugin is about
+19 MB. Adding -DTOFU would make it about 10 MB, but symbols would then show
+as empty boxes.
 
 If you built MuPDF before without -fPIC, run "make clean" in the mupdf
 folder first and build it again; the makefile does not notice the changed
