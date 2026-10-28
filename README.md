@@ -8,6 +8,8 @@ Live Markdown preview for Geany, shown in the sidebar. Rendered by MuPDF instead
 </picture>
 Written with assistance from Claude (Anthropic).
 
+&nbsp;
+
 <p align="center">
   <img src="images/markdown-preview-mupdf.png" alt="Markdown Preview (MuPDF) in Geany" width="600">
 </p>
