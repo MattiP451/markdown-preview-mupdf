@@ -1,0 +1,66 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Markdown Preview (MuPDF) for Geany
+Upstream-Contact: Matti Palmström <sjukfan@gmail.com>
+Source: @HOMEPAGE@
+
+Files: *
+Copyright: 2026 Matti Palmström <sjukfan@gmail.com>
+License: GPL-2+
+Comment: The plugin source code. Written with assistance from Claude (Anthropic).
+
+Files: usr/lib/*/geany/mdpreview.so
+Copyright: 2026 Matti Palmström <sjukfan@gmail.com>
+ 2004-2026 Artifex Software, Inc. (MuPDF and its bundled libraries)
+ and the other copyright holders listed in THIRD-PARTY-NOTICES.txt
+License: AGPL-3+
+Comment: The compiled plugin statically links MuPDF @MUPDF_VERSION@
+ (git commit @MUPDF_COMMIT@, unmodified).
+ Because MuPDF is AGPL-3.0-or-later, this binary as a whole is distributed
+ under the AGPL-3.0 or any later version. The notices for MuPDF's bundled
+ third-party code and data (FreeType, HarfBuzz, cmark-gfm, lcms2, OpenJPEG,
+ libjpeg, zlib, Brotli, MuJS, Gumbo, jbig2dec, extract, Adobe CMaps,
+ URW++ fonts, hyphenation patterns) are in THIRD-PARTY-NOTICES.txt.
+ This software is based in part on the work of the Independent JPEG Group.
+ Portions of this software are copyright (c) @FTYEAR@ The FreeType Project
+ (www.freetype.org). All rights reserved.
+
+License: GPL-2+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ On Debian systems, the complete text of the GNU General Public
+ License version 2 can be found in "/usr/share/common-licenses/GPL-2".
+
+License: AGPL-3+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU Affero General Public License as
+ published by the Free Software Foundation, either version 3 of the
+ License, or (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Affero General Public License for more details.
+ .
+ The complete text of the GNU Affero General Public License version 3
+ is in "/usr/share/doc/geany-plugin-mdpreview/AGPL-3.0.txt".
+
+# Corresponding source (AGPL-3.0 section 6)
+#
+# The complete source of this package is available, at no charge, from:
+#   plugin:  @HOMEPAGE@  (tag v@VERSION@)
+#   MuPDF:   https://github.com/ArtifexSoftware/mupdf, commit @MUPDF_COMMIT@
+#            (a copy is attached to the plugin's release page as
+#            mupdf-@MUPDF_VERSION@-@MUPDF_SHORT@-source.tar.xz)
+# In addition, Matti Palmström <sjukfan@gmail.com> will, on request, provide
+# anyone who has received this binary with a copy of the complete
+# corresponding source on a durable medium, for a charge no more than the
+# cost of doing so. This offer is valid for three years from the date of
+# this package, or for as long as the binary is distributed.

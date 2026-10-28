@@ -1,0 +1,21 @@
+2026-10-28
+
+ * Copy: join lines that were only wrapped by the layout (soft wraps).
+
+2026-10-28
+
+ * Add licence notices, AGPL-3.0 text and source offer for the binary;
+   make-deb.sh records the exact MuPDF version and commit.
+ * Add copyright and SPDX line to src/mdpreview.c.
+ * Fix right-click menu items not running (menu was destroyed before the
+   item action).
+ * Do not scroll to the top when the preview gets keyboard focus.
+ * Reload Preview re-reads the stylesheet; keep the scroll position.
+
+2026-10-28
+
+ * Scale with the desktop font DPI instead of a fixed 96 dpi.
+
+2026-10-28
+
+ * Initial version: MuPDF-rendered Markdown preview.

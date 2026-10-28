@@ -1,0 +1,24 @@
+mdpreview 0.4 (2026-10-28)
+
+ * Copying text no longer puts a line break wherever the preview wrapped
+   a line. Paragraphs, headings, list items and quotes are copied as one
+   line each, and wrapped lines in code blocks are rejoined; table cells
+   and real line breaks keep theirs.
+
+mdpreview 0.3 (2026-10-28)
+
+ * Fix the right-click menu: Copy, Select All, Copy Link Address and
+   Reload Preview did nothing.
+ * Clicking in the preview no longer scrolls it to the top.
+ * Reload Preview also re-reads the stylesheet and changed images.
+ * Licence notices for MuPDF and the libraries and data it bundles
+   (packaging/THIRD-PARTY-NOTICES.txt), included in the .deb together
+   with the AGPL-3.0 text and the source offer.
+
+mdpreview 0.2 (2026-10-28)
+
+ * Follow the desktop font DPI / text scaling (HiDPI).
+
+mdpreview 0.1 (2026-10-28)
+
+ * First release.

@@ -1,0 +1,93 @@
+Markdown Preview (MuPDF)
+========================
+
+Live Markdown preview for Geany, shown in the sidebar. Rendered by MuPDF
+instead of WebKit. Written with assistance from Claude (Anthropic).
+
+Functions
+---------
+* Live preview of the active document in the sidebar (or the message
+  window), including unsaved changes.
+* Reflow when the sidebar is resized.
+* GitHub-flavoured Markdown: tables, strikethrough, autolinks, footnotes.
+  Task lists show as plain bullets.
+* Local images with relative, ../ and absolute paths. Remote images are
+  not downloaded.
+* Links to local .md files open in Geany, and jump to the #anchor if the
+  link has one. #heading links scroll the preview. Web links open in the
+  browser, other local files in the desktop's default application.
+* Select and copy text: drag, double-click (word), triple-click (line),
+  Ctrl+C, Ctrl+A. Lines that were only wrapped by the preview are copied
+  as one line.
+* Right-click menu with Copy, Select All, Copy Link Address and Reload
+  Preview.
+* Your own CSS on top of MuPDF's Markdown style, reloaded when the
+  stylesheet is saved in Geany.
+* Scroll position is remembered per document.
+* HiDPI: follows the desktop's font DPI / text scaling.
+
+Build
+-----
+Needs Geany 2.0 or newer with GTK 3, and MuPDF 1.28 or newer (1.28 added
+the Markdown reader). MuPDF is built from source as static libraries and
+linked into the plugin. Tested with MuPDF master (1.29.0) on Debian.
+
+    sudo apt install build-essential git pkg-config libgtk-3-dev geany geany-common
+    mkdir mupdf-build && cd mupdf-build
+    git clone --recurse-submodules https://github.com/ArtifexSoftware/mupdf.git
+    git clone https://github.com/MattiP451/markdown-preview-mupdf.git
+    cd mupdf
+    make -j$(nproc) HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no \
+         XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
+    cd ../markdown-preview-mupdf/mdpreview
+    make -f Makefile.standalone MUPDF=../../mupdf/
+
+If you built MuPDF before without -fPIC, run "make clean" in the mupdf
+folder first and build it again; the makefile does not notice the changed
+flags, and linking fails with "recompile with -fPIC".
+
+Install for yourself (into ~/.config/geany/plugins):
+
+    make -f Makefile.standalone MUPDF=../../mupdf/ install
+
+Or make a .deb (installs into Geany's system plugin folder):
+
+    sh make-deb.sh
+    sudo apt install ./geany-plugin-mdpreview_*.deb
+
+Do not install both, or the plugin appears twice in the Plugin Manager.
+Then restart Geany, open Tools -> Plugin Manager and tick "Markdown
+Preview (MuPDF)". Untick the old "Markdown" plugin to avoid two preview
+tabs.
+
+Configuration
+-------------
+Edit -> Plugin Preferences -> Markdown Preview (MuPDF): where to show the
+preview, base font size, background colour, and "Edit Stylesheet", which
+opens preview.css (created from a commented template on first use).
+Files are in ~/.config/geany/plugins/mdpreview/ (mdpreview.conf and
+preview.css).
+
+MuPDF understands roughly CSS 2.1 (no flexbox, grid or JavaScript). Style
+links with a:link, not a, because every heading is also wrapped in an
+<a id="..."> anchor.
+
+Known limitations
+-----------------
+* Long unbreakable words in table cells don't wrap; a horizontal
+  scrollbar appears instead.
+* When copying, the plugin has to guess which line ends are only
+  wrapping. A real line break (in code, or two spaces / <br> in text) is
+  wrongly joined if the line ends within one word of the right edge of
+  the preview, so that the next word wouldn't have fitted anyway.
+* MuPDF's Markdown reader drops the last byte of its input. The plugin
+  appends a newline to work around it.
+
+Licence
+-------
+The plugin source is GPL-2.0-or-later (see COPYING). MuPDF is
+AGPL-3.0-or-later, so a compiled plugin that includes MuPDF, including
+the .deb, is distributed under the AGPL-3.0 (packaging/AGPL-3.0.txt).
+Anyone who receives it is entitled to the source of both the plugin and
+the MuPDF version it was built with. Notices for the libraries, fonts and
+data bundled in MuPDF: packaging/THIRD-PARTY-NOTICES.txt.

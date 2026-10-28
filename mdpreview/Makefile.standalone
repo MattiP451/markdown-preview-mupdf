@@ -1,0 +1,39 @@
+# Build the plugin on its own, against the installed Geany and a MuPDF
+# source tree that has been built with:
+#
+#   make HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
+#
+# Usage:
+#   make -f Makefile.standalone MUPDF=/path/to/mupdf
+#   make -f Makefile.standalone MUPDF=/path/to/mupdf install   # into ~/.config/geany/plugins
+
+MUPDF     ?= /tmp/mupdf
+MUPDF_LIB ?= $(MUPDF)/build/release
+PLUGINDIR ?= $(HOME)/.config/geany/plugins
+
+CC      ?= cc
+CFLAGS  ?= -O2 -g -Wall
+PKGS     = geany gtk+-3.0
+
+PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
+PKG_LIBS   := $(shell pkg-config --libs $(PKGS))
+
+mdpreview.so: src/mdpreview.c
+	@test -f $(MUPDF_LIB)/libmupdf.a || { echo "*** $(MUPDF_LIB)/libmupdf.a not found - build MuPDF first, or set MUPDF=..."; exit 1; }
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $< \
+		$(PKG_CFLAGS) -I$(MUPDF)/include \
+		$(MUPDF_LIB)/libmupdf.a $(MUPDF_LIB)/libmupdf-third.a \
+		$(PKG_LIBS) -lm -lpthread \
+		-Wl,--exclude-libs,ALL -Wl,-z,defs
+
+install: mdpreview.so
+	mkdir -p $(PLUGINDIR)
+	install -m 644 mdpreview.so $(PLUGINDIR)/mdpreview.so
+
+uninstall:
+	rm -f $(PLUGINDIR)/mdpreview.so
+
+clean:
+	rm -f mdpreview.so
+
+.PHONY: install uninstall clean

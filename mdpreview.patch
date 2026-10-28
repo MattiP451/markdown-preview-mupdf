@@ -1,0 +1,4733 @@
+diff --git a/COPYING.md b/COPYING.md
+index f5cdadb..8c3142a 100644
+--- a/COPYING.md
++++ b/COPYING.md
+@@ -32,6 +32,7 @@ The plugins use different license, see the list below and the `COPYING` in the c
+ | markdown                         | GPL-2.0-or-later           |
+ | markdown/peg-markdown            | GPL-2.0-or-later OR MIT    |
+ | markdown/peg-markdown/peg-0.1.9  | MIT                        |
++| mdpreview                        | GPL-2.0-or-later (AGPL-3.0-or-later when built with MuPDF) |
+ | overview                         | GPL-2.0-or-later           |
+ | pairtaghighlighter               | BSD-2-Clause               |
+ | pohelper                         | GPL-3.0-or-later           |
+diff --git a/Makefile.am b/Makefile.am
+index a3f1c10..49e6be8 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -119,6 +119,10 @@ if ENABLE_MARKDOWN
+ SUBDIRS += markdown
+ endif
+ 
++if ENABLE_MDPREVIEW
++SUBDIRS += mdpreview
++endif
++
+ if ENABLE_OVERVIEW
+ SUBDIRS += overview
+ endif
+diff --git a/README b/README
+index 81424e9..c840b18 100644
+--- a/README
++++ b/README
+@@ -73,6 +73,7 @@ Available plugins are:
+ * ``lipsum`` -- the Lipsum plugin
+ * ``lsp`` -- the LSP plugin
+ * ``markdown`` -- the Markdown plugin
++* ``mdpreview`` -- Markdown preview rendered with MuPDF (needs a MuPDF source tree, ``--with-mupdf=DIR``)
+ * ``overview``-- the overview plugin
+ * ``pairtaghighlighter`` -- the PairTagHighlighter plugin
+ * ``peg-markdown`` -- use the Peg-Markdown library in the Markdown plugin
+diff --git a/build/mdpreview.m4 b/build/mdpreview.m4
+new file mode 100644
+index 0000000..59995a8
+--- /dev/null
++++ b/build/mdpreview.m4
+@@ -0,0 +1,53 @@
++dnl GP_CHECK_MDPREVIEW
++dnl Markdown preview rendered with MuPDF. MuPDF is rarely packaged as a
++dnl shared library, so point configure at a MuPDF source tree that has
++dnl been built with "make libs":  --with-mupdf=/path/to/mupdf
++AC_DEFUN([GP_CHECK_MDPREVIEW],
++[
++    GP_ARG_DISABLE([MDPreview], [auto])
++
++    AC_ARG_WITH([mupdf],
++        AS_HELP_STRING([--with-mupdf=DIR],
++            [MuPDF source tree built with "make libs", for the MDPreview plugin]),
++        [mupdf_dir=$withval],
++        [mupdf_dir=no])
++    AC_ARG_VAR([MUPDF_LIBDIR],
++        [Directory with libmupdf.a and libmupdf-third.a (default: DIR/build/release)])
++
++    MUPDF_CFLAGS=
++    MUPDF_LIBS=
++    if test "x$enable_mdpreview" != xno; then
++        if test "x$mupdf_dir" = xno || test "x$mupdf_dir" = xyes; then
++            AS_IF([test "x$enable_mdpreview" = xyes],
++                  [AC_MSG_ERROR([The MDPreview plugin needs --with-mupdf=DIR])])
++            enable_mdpreview=no
++        else
++            mupdf_dir=`cd "$mupdf_dir" 2>/dev/null && pwd`
++            test -n "$MUPDF_LIBDIR" || MUPDF_LIBDIR="$mupdf_dir/build/release"
++            AC_MSG_CHECKING([for a built MuPDF in $mupdf_dir])
++            if test -n "$mupdf_dir" &&
++               test -f "$mupdf_dir/include/mupdf/fitz.h" &&
++               test -f "$MUPDF_LIBDIR/libmupdf.a" &&
++               test -f "$MUPDF_LIBDIR/libmupdf-third.a"; then
++                AC_MSG_RESULT([yes])
++                MUPDF_CFLAGS="-I$mupdf_dir/include"
++                MUPDF_LIBS="$MUPDF_LIBDIR/libmupdf.a $MUPDF_LIBDIR/libmupdf-third.a -lm -lpthread"
++            else
++                AC_MSG_RESULT([no])
++                AS_IF([test "x$enable_mdpreview" = xyes],
++                      [AC_MSG_ERROR([MuPDF headers or libraries not found (build MuPDF with "make libs" first)])],
++                      [AC_MSG_WARN([MuPDF not found, disabling the MDPreview plugin])
++                       enable_mdpreview=no])
++            fi
++        fi
++    fi
++    AC_SUBST([MUPDF_CFLAGS])
++    AC_SUBST([MUPDF_LIBS])
++
++    GP_COMMIT_PLUGIN_STATUS([MDPreview])
++
++    AC_CONFIG_FILES([
++        mdpreview/Makefile
++        mdpreview/src/Makefile
++    ])
++])
+diff --git a/configure.ac b/configure.ac
+index 1e8148a..bd15211 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -60,6 +60,7 @@ GP_CHECK_LINEOPERATIONS
+ GP_CHECK_LIPSUM
+ GP_CHECK_LSP
+ GP_CHECK_MARKDOWN
++GP_CHECK_MDPREVIEW
+ GP_CHECK_OVERVIEW
+ GP_CHECK_PAIRTAGHIGHLIGHTER
+ GP_CHECK_POHELPER
+diff --git a/mdpreview/AUTHORS b/mdpreview/AUTHORS
+new file mode 100644
+index 0000000..a56e3a5
+--- /dev/null
++++ b/mdpreview/AUTHORS
+@@ -0,0 +1 @@
++Matti Palmström sjukfan@gmail.com
+diff --git a/mdpreview/COPYING b/mdpreview/COPYING
+new file mode 100644
+index 0000000..d159169
+--- /dev/null
++++ b/mdpreview/COPYING
+@@ -0,0 +1,339 @@
++                    GNU GENERAL PUBLIC LICENSE
++                       Version 2, June 1991
++
++ Copyright (C) 1989, 1991 Free Software Foundation, Inc.,
++ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ Everyone is permitted to copy and distribute verbatim copies
++ of this license document, but changing it is not allowed.
++
++                            Preamble
++
++  The licenses for most software are designed to take away your
++freedom to share and change it.  By contrast, the GNU General Public
++License is intended to guarantee your freedom to share and change free
++software--to make sure the software is free for all its users.  This
++General Public License applies to most of the Free Software
++Foundation's software and to any other program whose authors commit to
++using it.  (Some other Free Software Foundation software is covered by
++the GNU Lesser General Public License instead.)  You can apply it to
++your programs, too.
++
++  When we speak of free software, we are referring to freedom, not
++price.  Our General Public Licenses are designed to make sure that you
++have the freedom to distribute copies of free software (and charge for
++this service if you wish), that you receive source code or can get it
++if you want it, that you can change the software or use pieces of it
++in new free programs; and that you know you can do these things.
++
++  To protect your rights, we need to make restrictions that forbid
++anyone to deny you these rights or to ask you to surrender the rights.
++These restrictions translate to certain responsibilities for you if you
++distribute copies of the software, or if you modify it.
++
++  For example, if you distribute copies of such a program, whether
++gratis or for a fee, you must give the recipients all the rights that
++you have.  You must make sure that they, too, receive or can get the
++source code.  And you must show them these terms so they know their
++rights.
++
++  We protect your rights with two steps: (1) copyright the software, and
++(2) offer you this license which gives you legal permission to copy,
++distribute and/or modify the software.
++
++  Also, for each author's protection and ours, we want to make certain
++that everyone understands that there is no warranty for this free
++software.  If the software is modified by someone else and passed on, we
++want its recipients to know that what they have is not the original, so
++that any problems introduced by others will not reflect on the original
++authors' reputations.
++
++  Finally, any free program is threatened constantly by software
++patents.  We wish to avoid the danger that redistributors of a free
++program will individually obtain patent licenses, in effect making the
++program proprietary.  To prevent this, we have made it clear that any
++patent must be licensed for everyone's free use or not licensed at all.
++
++  The precise terms and conditions for copying, distribution and
++modification follow.
++
++                    GNU GENERAL PUBLIC LICENSE
++   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
++
++  0. This License applies to any program or other work which contains
++a notice placed by the copyright holder saying it may be distributed
++under the terms of this General Public License.  The "Program", below,
++refers to any such program or work, and a "work based on the Program"
++means either the Program or any derivative work under copyright law:
++that is to say, a work containing the Program or a portion of it,
++either verbatim or with modifications and/or translated into another
++language.  (Hereinafter, translation is included without limitation in
++the term "modification".)  Each licensee is addressed as "you".
++
++Activities other than copying, distribution and modification are not
++covered by this License; they are outside its scope.  The act of
++running the Program is not restricted, and the output from the Program
++is covered only if its contents constitute a work based on the
++Program (independent of having been made by running the Program).
++Whether that is true depends on what the Program does.
++
++  1. You may copy and distribute verbatim copies of the Program's
++source code as you receive it, in any medium, provided that you
++conspicuously and appropriately publish on each copy an appropriate
++copyright notice and disclaimer of warranty; keep intact all the
++notices that refer to this License and to the absence of any warranty;
++and give any other recipients of the Program a copy of this License
++along with the Program.
++
++You may charge a fee for the physical act of transferring a copy, and
++you may at your option offer warranty protection in exchange for a fee.
++
++  2. You may modify your copy or copies of the Program or any portion
++of it, thus forming a work based on the Program, and copy and
++distribute such modifications or work under the terms of Section 1
++above, provided that you also meet all of these conditions:
++
++    a) You must cause the modified files to carry prominent notices
++    stating that you changed the files and the date of any change.
++
++    b) You must cause any work that you distribute or publish, that in
++    whole or in part contains or is derived from the Program or any
++    part thereof, to be licensed as a whole at no charge to all third
++    parties under the terms of this License.
++
++    c) If the modified program normally reads commands interactively
++    when run, you must cause it, when started running for such
++    interactive use in the most ordinary way, to print or display an
++    announcement including an appropriate copyright notice and a
++    notice that there is no warranty (or else, saying that you provide
++    a warranty) and that users may redistribute the program under
++    these conditions, and telling the user how to view a copy of this
++    License.  (Exception: if the Program itself is interactive but
++    does not normally print such an announcement, your work based on
++    the Program is not required to print an announcement.)
++
++These requirements apply to the modified work as a whole.  If
++identifiable sections of that work are not derived from the Program,
++and can be reasonably considered independent and separate works in
++themselves, then this License, and its terms, do not apply to those
++sections when you distribute them as separate works.  But when you
++distribute the same sections as part of a whole which is a work based
++on the Program, the distribution of the whole must be on the terms of
++this License, whose permissions for other licensees extend to the
++entire whole, and thus to each and every part regardless of who wrote it.
++
++Thus, it is not the intent of this section to claim rights or contest
++your rights to work written entirely by you; rather, the intent is to
++exercise the right to control the distribution of derivative or
++collective works based on the Program.
++
++In addition, mere aggregation of another work not based on the Program
++with the Program (or with a work based on the Program) on a volume of
++a storage or distribution medium does not bring the other work under
++the scope of this License.
++
++  3. You may copy and distribute the Program (or a work based on it,
++under Section 2) in object code or executable form under the terms of
++Sections 1 and 2 above provided that you also do one of the following:
++
++    a) Accompany it with the complete corresponding machine-readable
++    source code, which must be distributed under the terms of Sections
++    1 and 2 above on a medium customarily used for software interchange; or,
++
++    b) Accompany it with a written offer, valid for at least three
++    years, to give any third party, for a charge no more than your
++    cost of physically performing source distribution, a complete
++    machine-readable copy of the corresponding source code, to be
++    distributed under the terms of Sections 1 and 2 above on a medium
++    customarily used for software interchange; or,
++
++    c) Accompany it with the information you received as to the offer
++    to distribute corresponding source code.  (This alternative is
++    allowed only for noncommercial distribution and only if you
++    received the program in object code or executable form with such
++    an offer, in accord with Subsection b above.)
++
++The source code for a work means the preferred form of the work for
++making modifications to it.  For an executable work, complete source
++code means all the source code for all modules it contains, plus any
++associated interface definition files, plus the scripts used to
++control compilation and installation of the executable.  However, as a
++special exception, the source code distributed need not include
++anything that is normally distributed (in either source or binary
++form) with the major components (compiler, kernel, and so on) of the
++operating system on which the executable runs, unless that component
++itself accompanies the executable.
++
++If distribution of executable or object code is made by offering
++access to copy from a designated place, then offering equivalent
++access to copy the source code from the same place counts as
++distribution of the source code, even though third parties are not
++compelled to copy the source along with the object code.
++
++  4. You may not copy, modify, sublicense, or distribute the Program
++except as expressly provided under this License.  Any attempt
++otherwise to copy, modify, sublicense or distribute the Program is
++void, and will automatically terminate your rights under this License.
++However, parties who have received copies, or rights, from you under
++this License will not have their licenses terminated so long as such
++parties remain in full compliance.
++
++  5. You are not required to accept this License, since you have not
++signed it.  However, nothing else grants you permission to modify or
++distribute the Program or its derivative works.  These actions are
++prohibited by law if you do not accept this License.  Therefore, by
++modifying or distributing the Program (or any work based on the
++Program), you indicate your acceptance of this License to do so, and
++all its terms and conditions for copying, distributing or modifying
++the Program or works based on it.
++
++  6. Each time you redistribute the Program (or any work based on the
++Program), the recipient automatically receives a license from the
++original licensor to copy, distribute or modify the Program subject to
++these terms and conditions.  You may not impose any further
++restrictions on the recipients' exercise of the rights granted herein.
++You are not responsible for enforcing compliance by third parties to
++this License.
++
++  7. If, as a consequence of a court judgment or allegation of patent
++infringement or for any other reason (not limited to patent issues),
++conditions are imposed on you (whether by court order, agreement or
++otherwise) that contradict the conditions of this License, they do not
++excuse you from the conditions of this License.  If you cannot
++distribute so as to satisfy simultaneously your obligations under this
++License and any other pertinent obligations, then as a consequence you
++may not distribute the Program at all.  For example, if a patent
++license would not permit royalty-free redistribution of the Program by
++all those who receive copies directly or indirectly through you, then
++the only way you could satisfy both it and this License would be to
++refrain entirely from distribution of the Program.
++
++If any portion of this section is held invalid or unenforceable under
++any particular circumstance, the balance of the section is intended to
++apply and the section as a whole is intended to apply in other
++circumstances.
++
++It is not the purpose of this section to induce you to infringe any
++patents or other property right claims or to contest validity of any
++such claims; this section has the sole purpose of protecting the
++integrity of the free software distribution system, which is
++implemented by public license practices.  Many people have made
++generous contributions to the wide range of software distributed
++through that system in reliance on consistent application of that
++system; it is up to the author/donor to decide if he or she is willing
++to distribute software through any other system and a licensee cannot
++impose that choice.
++
++This section is intended to make thoroughly clear what is believed to
++be a consequence of the rest of this License.
++
++  8. If the distribution and/or use of the Program is restricted in
++certain countries either by patents or by copyrighted interfaces, the
++original copyright holder who places the Program under this License
++may add an explicit geographical distribution limitation excluding
++those countries, so that distribution is permitted only in or among
++countries not thus excluded.  In such case, this License incorporates
++the limitation as if written in the body of this License.
++
++  9. The Free Software Foundation may publish revised and/or new versions
++of the General Public License from time to time.  Such new versions will
++be similar in spirit to the present version, but may differ in detail to
++address new problems or concerns.
++
++Each version is given a distinguishing version number.  If the Program
++specifies a version number of this License which applies to it and "any
++later version", you have the option of following the terms and conditions
++either of that version or of any later version published by the Free
++Software Foundation.  If the Program does not specify a version number of
++this License, you may choose any version ever published by the Free Software
++Foundation.
++
++  10. If you wish to incorporate parts of the Program into other free
++programs whose distribution conditions are different, write to the author
++to ask for permission.  For software which is copyrighted by the Free
++Software Foundation, write to the Free Software Foundation; we sometimes
++make exceptions for this.  Our decision will be guided by the two goals
++of preserving the free status of all derivatives of our free software and
++of promoting the sharing and reuse of software generally.
++
++                            NO WARRANTY
++
++  11. BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
++FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE LAW.  EXCEPT WHEN
++OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES
++PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED
++OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
++MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.  THE ENTIRE RISK AS
++TO THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU.  SHOULD THE
++PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING,
++REPAIR OR CORRECTION.
++
++  12. IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
++WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR
++REDISTRIBUTE THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES,
++INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING
++OUT OF THE USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED
++TO LOSS OF DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY
++YOU OR THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER
++PROGRAMS), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
++POSSIBILITY OF SUCH DAMAGES.
++
++                     END OF TERMS AND CONDITIONS
++
++            How to Apply These Terms to Your New Programs
++
++  If you develop a new program, and you want it to be of the greatest
++possible use to the public, the best way to achieve this is to make it
++free software which everyone can redistribute and change under these terms.
++
++  To do so, attach the following notices to the program.  It is safest
++to attach them to the start of each source file to most effectively
++convey the exclusion of warranty; and each file should have at least
++the "copyright" line and a pointer to where the full notice is found.
++
++    <one line to give the program's name and a brief idea of what it does.>
++    Copyright (C) <year>  <name of author>
++
++    This program is free software; you can redistribute it and/or modify
++    it under the terms of the GNU General Public License as published by
++    the Free Software Foundation; either version 2 of the License, or
++    (at your option) any later version.
++
++    This program is distributed in the hope that it will be useful,
++    but WITHOUT ANY WARRANTY; without even the implied warranty of
++    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++    GNU General Public License for more details.
++
++    You should have received a copy of the GNU General Public License along
++    with this program; if not, write to the Free Software Foundation, Inc.,
++    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++
++Also add information on how to contact you by electronic and paper mail.
++
++If the program is interactive, make it output a short notice like this
++when it starts in an interactive mode:
++
++    Gnomovision version 69, Copyright (C) year name of author
++    Gnomovision comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
++    This is free software, and you are welcome to redistribute it
++    under certain conditions; type `show c' for details.
++
++The hypothetical commands `show w' and `show c' should show the appropriate
++parts of the General Public License.  Of course, the commands you use may
++be called something other than `show w' and `show c'; they could even be
++mouse-clicks or menu items--whatever suits your program.
++
++You should also get your employer (if you work as a programmer) or your
++school, if any, to sign a "copyright disclaimer" for the program, if
++necessary.  Here is a sample; alter the names:
++
++  Yoyodyne, Inc., hereby disclaims all copyright interest in the program
++  `Gnomovision' (which makes passes at compilers) written by James Hacker.
++
++  <signature of Ty Coon>, 1 April 1989
++  Ty Coon, President of Vice
++
++This General Public License does not permit incorporating your program into
++proprietary programs.  If your program is a subroutine library, you may
++consider it more useful to permit linking proprietary applications with the
++library.  If this is what you want to do, use the GNU Lesser General
++Public License instead of this License.
+diff --git a/mdpreview/ChangeLog b/mdpreview/ChangeLog
+new file mode 100644
+index 0000000..1baafda
+--- /dev/null
++++ b/mdpreview/ChangeLog
+@@ -0,0 +1,21 @@
++2026-10-28
++
++ * Copy: join lines that were only wrapped by the layout (soft wraps).
++
++2026-10-28
++
++ * Add licence notices, AGPL-3.0 text and source offer for the binary;
++   make-deb.sh records the exact MuPDF version and commit.
++ * Add copyright and SPDX line to src/mdpreview.c.
++ * Fix right-click menu items not running (menu was destroyed before the
++   item action).
++ * Do not scroll to the top when the preview gets keyboard focus.
++ * Reload Preview re-reads the stylesheet; keep the scroll position.
++
++2026-10-28
++
++ * Scale with the desktop font DPI instead of a fixed 96 dpi.
++
++2026-10-28
++
++ * Initial version: MuPDF-rendered Markdown preview.
+diff --git a/mdpreview/Makefile.am b/mdpreview/Makefile.am
+new file mode 100644
+index 0000000..c0df77a
+--- /dev/null
++++ b/mdpreview/Makefile.am
+@@ -0,0 +1,12 @@
++include $(top_srcdir)/build/vars.auxfiles.mk
++
++SUBDIRS = src
++plugin = mdpreview
++
++EXTRA_DIST += Makefile.standalone make-deb.sh \
++	packaging/AGPL-3.0.txt \
++	packaging/THIRD-PARTY-NOTICES.txt \
++	packaging/copyright \
++	packaging/gen-notices.sh \
++	packaging/make-mupdf-source.sh
++include $(top_srcdir)/build/vars.build.mk
+diff --git a/mdpreview/Makefile.standalone b/mdpreview/Makefile.standalone
+new file mode 100644
+index 0000000..0944b1b
+--- /dev/null
++++ b/mdpreview/Makefile.standalone
+@@ -0,0 +1,39 @@
++# Build the plugin on its own, against the installed Geany and a MuPDF
++# source tree that has been built with:
++#
++#   make HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
++#
++# Usage:
++#   make -f Makefile.standalone MUPDF=/path/to/mupdf
++#   make -f Makefile.standalone MUPDF=/path/to/mupdf install   # into ~/.config/geany/plugins
++
++MUPDF     ?= /tmp/mupdf
++MUPDF_LIB ?= $(MUPDF)/build/release
++PLUGINDIR ?= $(HOME)/.config/geany/plugins
++
++CC      ?= cc
++CFLAGS  ?= -O2 -g -Wall
++PKGS     = geany gtk+-3.0
++
++PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
++PKG_LIBS   := $(shell pkg-config --libs $(PKGS))
++
++mdpreview.so: src/mdpreview.c
++	@test -f $(MUPDF_LIB)/libmupdf.a || { echo "*** $(MUPDF_LIB)/libmupdf.a not found - build MuPDF first, or set MUPDF=..."; exit 1; }
++	$(CC) $(CFLAGS) -fPIC -shared -o $@ $< \
++		$(PKG_CFLAGS) -I$(MUPDF)/include \
++		$(MUPDF_LIB)/libmupdf.a $(MUPDF_LIB)/libmupdf-third.a \
++		$(PKG_LIBS) -lm -lpthread \
++		-Wl,--exclude-libs,ALL -Wl,-z,defs
++
++install: mdpreview.so
++	mkdir -p $(PLUGINDIR)
++	install -m 644 mdpreview.so $(PLUGINDIR)/mdpreview.so
++
++uninstall:
++	rm -f $(PLUGINDIR)/mdpreview.so
++
++clean:
++	rm -f mdpreview.so
++
++.PHONY: install uninstall clean
+diff --git a/mdpreview/NEWS b/mdpreview/NEWS
+new file mode 100644
+index 0000000..fd89387
+--- /dev/null
++++ b/mdpreview/NEWS
+@@ -0,0 +1,24 @@
++mdpreview 0.4 (2026-10-28)
++
++ * Copying text no longer puts a line break wherever the preview wrapped
++   a line. Paragraphs, headings, list items and quotes are copied as one
++   line each, and wrapped lines in code blocks are rejoined; table cells
++   and real line breaks keep theirs.
++
++mdpreview 0.3 (2026-10-28)
++
++ * Fix the right-click menu: Copy, Select All, Copy Link Address and
++   Reload Preview did nothing.
++ * Clicking in the preview no longer scrolls it to the top.
++ * Reload Preview also re-reads the stylesheet and changed images.
++ * Licence notices for MuPDF and the libraries and data it bundles
++   (packaging/THIRD-PARTY-NOTICES.txt), included in the .deb together
++   with the AGPL-3.0 text and the source offer.
++
++mdpreview 0.2 (2026-10-28)
++
++ * Follow the desktop font DPI / text scaling (HiDPI).
++
++mdpreview 0.1 (2026-10-28)
++
++ * First release.
+diff --git a/mdpreview/README b/mdpreview/README
+new file mode 100644
+index 0000000..3e5f439
+--- /dev/null
++++ b/mdpreview/README
+@@ -0,0 +1,93 @@
++Markdown Preview (MuPDF)
++========================
++
++Live Markdown preview for Geany, shown in the sidebar. Rendered by MuPDF
++instead of WebKit. Written with assistance from Claude (Anthropic).
++
++Functions
++---------
++* Live preview of the active document in the sidebar (or the message
++  window), including unsaved changes.
++* Reflow when the sidebar is resized.
++* GitHub-flavoured Markdown: tables, strikethrough, autolinks, footnotes.
++  Task lists show as plain bullets.
++* Local images with relative, ../ and absolute paths. Remote images are
++  not downloaded.
++* Links to local .md files open in Geany, and jump to the #anchor if the
++  link has one. #heading links scroll the preview. Web links open in the
++  browser, other local files in the desktop's default application.
++* Select and copy text: drag, double-click (word), triple-click (line),
++  Ctrl+C, Ctrl+A. Lines that were only wrapped by the preview are copied
++  as one line.
++* Right-click menu with Copy, Select All, Copy Link Address and Reload
++  Preview.
++* Your own CSS on top of MuPDF's Markdown style, reloaded when the
++  stylesheet is saved in Geany.
++* Scroll position is remembered per document.
++* HiDPI: follows the desktop's font DPI / text scaling.
++
++Build
++-----
++Needs Geany 2.0 or newer with GTK 3, and MuPDF 1.28 or newer (1.28 added
++the Markdown reader). MuPDF is built from source as static libraries and
++linked into the plugin. Tested with MuPDF master (1.29.0) on Debian.
++
++    sudo apt install build-essential git pkg-config libgtk-3-dev geany geany-common
++    mkdir mupdf-build && cd mupdf-build
++    git clone --recurse-submodules https://github.com/ArtifexSoftware/mupdf.git
++    git clone https://github.com/MattiP451/markdown-preview-mupdf.git
++    cd mupdf
++    make -j$(nproc) HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no \
++         XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
++    cd ../markdown-preview-mupdf/mdpreview
++    make -f Makefile.standalone MUPDF=../../mupdf/
++
++If you built MuPDF before without -fPIC, run "make clean" in the mupdf
++folder first and build it again; the makefile does not notice the changed
++flags, and linking fails with "recompile with -fPIC".
++
++Install for yourself (into ~/.config/geany/plugins):
++
++    make -f Makefile.standalone MUPDF=../../mupdf/ install
++
++Or make a .deb (installs into Geany's system plugin folder):
++
++    sh make-deb.sh
++    sudo apt install ./geany-plugin-mdpreview_*.deb
++
++Do not install both, or the plugin appears twice in the Plugin Manager.
++Then restart Geany, open Tools -> Plugin Manager and tick "Markdown
++Preview (MuPDF)". Untick the old "Markdown" plugin to avoid two preview
++tabs.
++
++Configuration
++-------------
++Edit -> Plugin Preferences -> Markdown Preview (MuPDF): where to show the
++preview, base font size, background colour, and "Edit Stylesheet", which
++opens preview.css (created from a commented template on first use).
++Files are in ~/.config/geany/plugins/mdpreview/ (mdpreview.conf and
++preview.css).
++
++MuPDF understands roughly CSS 2.1 (no flexbox, grid or JavaScript). Style
++links with a:link, not a, because every heading is also wrapped in an
++<a id="..."> anchor.
++
++Known limitations
++-----------------
++* Long unbreakable words in table cells don't wrap; a horizontal
++  scrollbar appears instead.
++* When copying, the plugin has to guess which line ends are only
++  wrapping. A real line break (in code, or two spaces / <br> in text) is
++  wrongly joined if the line ends within one word of the right edge of
++  the preview, so that the next word wouldn't have fitted anyway.
++* MuPDF's Markdown reader drops the last byte of its input. The plugin
++  appends a newline to work around it.
++
++Licence
++-------
++The plugin source is GPL-2.0-or-later (see COPYING). MuPDF is
++AGPL-3.0-or-later, so a compiled plugin that includes MuPDF, including
++the .deb, is distributed under the AGPL-3.0 (packaging/AGPL-3.0.txt).
++Anyone who receives it is entitled to the source of both the plugin and
++the MuPDF version it was built with. Notices for the libraries, fonts and
++data bundled in MuPDF: packaging/THIRD-PARTY-NOTICES.txt.
+diff --git a/mdpreview/make-deb.sh b/mdpreview/make-deb.sh
+new file mode 100755
+index 0000000..74461b3
+--- /dev/null
++++ b/mdpreview/make-deb.sh
+@@ -0,0 +1,105 @@
++#!/bin/sh
++# Build a .deb of the Markdown Preview (MuPDF) Geany plugin.
++#
++# Run it after compiling the plugin:
++#   make -f Makefile.standalone MUPDF=/path/to/mupdf
++#   MUPDF=/path/to/mupdf sh make-deb.sh        (default MUPDF: ../../mupdf)
++# Then:
++#   sudo apt install ./geany-plugin-mdpreview_*.deb
++#
++# MUPDF is the MuPDF source tree the plugin was built with. It is needed to
++# record the exact MuPDF version and commit in the package, because the AGPL
++# requires you to say where the corresponding source can be found.
++# Without a git checkout, set MUPDF_VERSION and MUPDF_COMMIT yourself.
++set -e
++cd "$(dirname "$0")"
++
++PKG=geany-plugin-mdpreview
++VERSION=${VERSION:-0.4}
++MAINTAINER=${MAINTAINER:-"Matti Palmström <sjukfan@gmail.com>"}
++HOMEPAGE=${HOMEPAGE:-https://github.com/MattiP451/markdown-preview-mupdf}
++MUPDF=${MUPDF:-../../mupdf}
++
++die() { echo "make-deb.sh: $*" >&2; exit 1; }
++
++test -f mdpreview.so || die "mdpreview.so not found. Build it first:  make -f Makefile.standalone MUPDF=/path/to/mupdf"
++for f in README NEWS AUTHORS ChangeLog COPYING packaging/copyright packaging/AGPL-3.0.txt packaging/THIRD-PARTY-NOTICES.txt; do
++	test -f "$f" || die "missing $f"
++done
++
++# --- which MuPDF is inside the .so? ---
++if test -z "$MUPDF_VERSION" && test -f "$MUPDF/include/mupdf/fitz/version.h"; then
++	MUPDF_VERSION=$(sed -n 's/^#define FZ_VERSION "\(.*\)"/\1/p' "$MUPDF/include/mupdf/fitz/version.h")
++fi
++if test -z "$MUPDF_COMMIT" && test -d "$MUPDF/.git"; then
++	MUPDF_COMMIT=$(git -C "$MUPDF" rev-parse HEAD)
++	if test -n "$(git -C "$MUPDF" status --porcelain --untracked-files=no 2>/dev/null)"; then
++		die "$MUPDF has local changes. The AGPL source offer must match what was built; commit them or build a clean checkout (and publish the changes)."
++	fi
++fi
++test -n "$MUPDF_VERSION" && test -n "$MUPDF_COMMIT" || die "cannot tell which MuPDF was used. Set MUPDF=/path/to/mupdf (a git checkout) or MUPDF_VERSION and MUPDF_COMMIT."
++MUPDF_SHORT=$(echo "$MUPDF_COMMIT" | cut -c1-8)
++FTYEAR=${FTYEAR:-$(sed -n 's/^Portions of this software are copyright (c) \([0-9]*\) .*/\1/p' packaging/THIRD-PARTY-NOTICES.txt | head -1)}
++
++ARCH=$(dpkg --print-architecture)
++LIBDIR=$(pkg-config --variable=libdir geany 2>/dev/null || true)
++test -n "$LIBDIR" || LIBDIR=/usr/lib/$(gcc -print-multiarch)
++GEANY_VER=$(dpkg-query -W -f='${Version}' geany | sed 's/-[^-]*$//')
++# Debian's geany package "Provides: geany-abi-NNNNN"; a plugin only loads
++# into a Geany with the same ABI, so depend on exactly that.
++ABI=$(dpkg-query -W -f='${Provides}' geany | tr ',' '\n' | grep -o 'geany-abi-[0-9]*' || true)
++
++ROOT=debian-build/${PKG}_${VERSION}_${ARCH}
++DOC=$ROOT/usr/share/doc/$PKG
++rm -rf debian-build
++mkdir -p "$ROOT/DEBIAN" "$ROOT$LIBDIR/geany" "$DOC"
++
++install -m 644 mdpreview.so "$ROOT$LIBDIR/geany/mdpreview.so"
++strip --strip-unneeded "$ROOT$LIBDIR/geany/mdpreview.so"
++
++install -m 644 README NEWS AUTHORS "$DOC/"
++install -m 644 packaging/AGPL-3.0.txt "$DOC/"
++gzip -9n -c ChangeLog > "$DOC/changelog.gz"
++# minimal Debian-format changelog for the package itself
++{
++	echo "$PKG ($VERSION) unstable; urgency=low"
++	echo
++	echo "  * Built with MuPDF $MUPDF_VERSION ($MUPDF_SHORT)."
++	echo
++	echo " -- $MAINTAINER  $(date -R)"
++} | gzip -9n > "$DOC/changelog.Debian.gz"
++gzip -9n -c packaging/THIRD-PARTY-NOTICES.txt > "$DOC/THIRD-PARTY-NOTICES.txt.gz"
++sed -e "s|@HOMEPAGE@|$HOMEPAGE|g" -e "s|@VERSION@|$VERSION|g" \
++    -e "s|@MUPDF_VERSION@|$MUPDF_VERSION|g" -e "s|@MUPDF_COMMIT@|$MUPDF_COMMIT|g" \
++    -e "s|@MUPDF_SHORT@|$MUPDF_SHORT|g" -e "s|@FTYEAR@|$FTYEAR|g" \
++    packaging/copyright > "$DOC/copyright"
++chmod 644 "$DOC/copyright"
++
++DEPENDS="geany (>= $GEANY_VER), libgtk-3-0t64 | libgtk-3-0, libc6"
++test -n "$ABI" && DEPENDS="$DEPENDS, $ABI"
++SIZE=$(du -sk "$ROOT" | cut -f1)
++
++cat > "$ROOT/DEBIAN/control" <<CTL
++Package: $PKG
++Version: $VERSION
++Architecture: $ARCH
++Maintainer: $MAINTAINER
++Installed-Size: $SIZE
++Depends: $DEPENDS
++Section: editors
++Priority: optional
++Homepage: $HOMEPAGE
++Description: Markdown preview for Geany, rendered with MuPDF
++ Shows a live preview of the current Markdown document in Geany's
++ sidebar. Re-flows on resize, shows local images, follows links to
++ other Markdown files, supports text selection and custom CSS.
++ MuPDF is built into the plugin; no WebKit needed.
++ .
++ Licence: because MuPDF (AGPL-3.0-or-later) is linked into the plugin,
++ this binary package is distributed under the AGPL-3.0. Source:
++ $HOMEPAGE
++CTL
++
++dpkg-deb --root-owner-group --build "$ROOT" .
++rm -rf debian-build
++ls -l ${PKG}_${VERSION}_${ARCH}.deb
+diff --git a/mdpreview/packaging/AGPL-3.0.txt b/mdpreview/packaging/AGPL-3.0.txt
+new file mode 100644
+index 0000000..dba13ed
+--- /dev/null
++++ b/mdpreview/packaging/AGPL-3.0.txt
+@@ -0,0 +1,661 @@
++                    GNU AFFERO GENERAL PUBLIC LICENSE
++                       Version 3, 19 November 2007
++
++ Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
++ Everyone is permitted to copy and distribute verbatim copies
++ of this license document, but changing it is not allowed.
++
++                            Preamble
++
++  The GNU Affero General Public License is a free, copyleft license for
++software and other kinds of works, specifically designed to ensure
++cooperation with the community in the case of network server software.
++
++  The licenses for most software and other practical works are designed
++to take away your freedom to share and change the works.  By contrast,
++our General Public Licenses are intended to guarantee your freedom to
++share and change all versions of a program--to make sure it remains free
++software for all its users.
++
++  When we speak of free software, we are referring to freedom, not
++price.  Our General Public Licenses are designed to make sure that you
++have the freedom to distribute copies of free software (and charge for
++them if you wish), that you receive source code or can get it if you
++want it, that you can change the software or use pieces of it in new
++free programs, and that you know you can do these things.
++
++  Developers that use our General Public Licenses protect your rights
++with two steps: (1) assert copyright on the software, and (2) offer
++you this License which gives you legal permission to copy, distribute
++and/or modify the software.
++
++  A secondary benefit of defending all users' freedom is that
++improvements made in alternate versions of the program, if they
++receive widespread use, become available for other developers to
++incorporate.  Many developers of free software are heartened and
++encouraged by the resulting cooperation.  However, in the case of
++software used on network servers, this result may fail to come about.
++The GNU General Public License permits making a modified version and
++letting the public access it on a server without ever releasing its
++source code to the public.
++
++  The GNU Affero General Public License is designed specifically to
++ensure that, in such cases, the modified source code becomes available
++to the community.  It requires the operator of a network server to
++provide the source code of the modified version running there to the
++users of that server.  Therefore, public use of a modified version, on
++a publicly accessible server, gives the public access to the source
++code of the modified version.
++
++  An older license, called the Affero General Public License and
++published by Affero, was designed to accomplish similar goals.  This is
++a different license, not a version of the Affero GPL, but Affero has
++released a new version of the Affero GPL which permits relicensing under
++this license.
++
++  The precise terms and conditions for copying, distribution and
++modification follow.
++
++                       TERMS AND CONDITIONS
++
++  0. Definitions.
++
++  "This License" refers to version 3 of the GNU Affero General Public License.
++
++  "Copyright" also means copyright-like laws that apply to other kinds of
++works, such as semiconductor masks.
++
++  "The Program" refers to any copyrightable work licensed under this
++License.  Each licensee is addressed as "you".  "Licensees" and
++"recipients" may be individuals or organizations.
++
++  To "modify" a work means to copy from or adapt all or part of the work
++in a fashion requiring copyright permission, other than the making of an
++exact copy.  The resulting work is called a "modified version" of the
++earlier work or a work "based on" the earlier work.
++
++  A "covered work" means either the unmodified Program or a work based
++on the Program.
++
++  To "propagate" a work means to do anything with it that, without
++permission, would make you directly or secondarily liable for
++infringement under applicable copyright law, except executing it on a
++computer or modifying a private copy.  Propagation includes copying,
++distribution (with or without modification), making available to the
++public, and in some countries other activities as well.
++
++  To "convey" a work means any kind of propagation that enables other
++parties to make or receive copies.  Mere interaction with a user through
++a computer network, with no transfer of a copy, is not conveying.
++
++  An interactive user interface displays "Appropriate Legal Notices"
++to the extent that it includes a convenient and prominently visible
++feature that (1) displays an appropriate copyright notice, and (2)
++tells the user that there is no warranty for the work (except to the
++extent that warranties are provided), that licensees may convey the
++work under this License, and how to view a copy of this License.  If
++the interface presents a list of user commands or options, such as a
++menu, a prominent item in the list meets this criterion.
++
++  1. Source Code.
++
++  The "source code" for a work means the preferred form of the work
++for making modifications to it.  "Object code" means any non-source
++form of a work.
++
++  A "Standard Interface" means an interface that either is an official
++standard defined by a recognized standards body, or, in the case of
++interfaces specified for a particular programming language, one that
++is widely used among developers working in that language.
++
++  The "System Libraries" of an executable work include anything, other
++than the work as a whole, that (a) is included in the normal form of
++packaging a Major Component, but which is not part of that Major
++Component, and (b) serves only to enable use of the work with that
++Major Component, or to implement a Standard Interface for which an
++implementation is available to the public in source code form.  A
++"Major Component", in this context, means a major essential component
++(kernel, window system, and so on) of the specific operating system
++(if any) on which the executable work runs, or a compiler used to
++produce the work, or an object code interpreter used to run it.
++
++  The "Corresponding Source" for a work in object code form means all
++the source code needed to generate, install, and (for an executable
++work) run the object code and to modify the work, including scripts to
++control those activities.  However, it does not include the work's
++System Libraries, or general-purpose tools or generally available free
++programs which are used unmodified in performing those activities but
++which are not part of the work.  For example, Corresponding Source
++includes interface definition files associated with source files for
++the work, and the source code for shared libraries and dynamically
++linked subprograms that the work is specifically designed to require,
++such as by intimate data communication or control flow between those
++subprograms and other parts of the work.
++
++  The Corresponding Source need not include anything that users
++can regenerate automatically from other parts of the Corresponding
++Source.
++
++  The Corresponding Source for a work in source code form is that
++same work.
++
++  2. Basic Permissions.
++
++  All rights granted under this License are granted for the term of
++copyright on the Program, and are irrevocable provided the stated
++conditions are met.  This License explicitly affirms your unlimited
++permission to run the unmodified Program.  The output from running a
++covered work is covered by this License only if the output, given its
++content, constitutes a covered work.  This License acknowledges your
++rights of fair use or other equivalent, as provided by copyright law.
++
++  You may make, run and propagate covered works that you do not
++convey, without conditions so long as your license otherwise remains
++in force.  You may convey covered works to others for the sole purpose
++of having them make modifications exclusively for you, or provide you
++with facilities for running those works, provided that you comply with
++the terms of this License in conveying all material for which you do
++not control copyright.  Those thus making or running the covered works
++for you must do so exclusively on your behalf, under your direction
++and control, on terms that prohibit them from making any copies of
++your copyrighted material outside their relationship with you.
++
++  Conveying under any other circumstances is permitted solely under
++the conditions stated below.  Sublicensing is not allowed; section 10
++makes it unnecessary.
++
++  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
++
++  No covered work shall be deemed part of an effective technological
++measure under any applicable law fulfilling obligations under article
++11 of the WIPO copyright treaty adopted on 20 December 1996, or
++similar laws prohibiting or restricting circumvention of such
++measures.
++
++  When you convey a covered work, you waive any legal power to forbid
++circumvention of technological measures to the extent such circumvention
++is effected by exercising rights under this License with respect to
++the covered work, and you disclaim any intention to limit operation or
++modification of the work as a means of enforcing, against the work's
++users, your or third parties' legal rights to forbid circumvention of
++technological measures.
++
++  4. Conveying Verbatim Copies.
++
++  You may convey verbatim copies of the Program's source code as you
++receive it, in any medium, provided that you conspicuously and
++appropriately publish on each copy an appropriate copyright notice;
++keep intact all notices stating that this License and any
++non-permissive terms added in accord with section 7 apply to the code;
++keep intact all notices of the absence of any warranty; and give all
++recipients a copy of this License along with the Program.
++
++  You may charge any price or no price for each copy that you convey,
++and you may offer support or warranty protection for a fee.
++
++  5. Conveying Modified Source Versions.
++
++  You may convey a work based on the Program, or the modifications to
++produce it from the Program, in the form of source code under the
++terms of section 4, provided that you also meet all of these conditions:
++
++    a) The work must carry prominent notices stating that you modified
++    it, and giving a relevant date.
++
++    b) The work must carry prominent notices stating that it is
++    released under this License and any conditions added under section
++    7.  This requirement modifies the requirement in section 4 to
++    "keep intact all notices".
++
++    c) You must license the entire work, as a whole, under this
++    License to anyone who comes into possession of a copy.  This
++    License will therefore apply, along with any applicable section 7
++    additional terms, to the whole of the work, and all its parts,
++    regardless of how they are packaged.  This License gives no
++    permission to license the work in any other way, but it does not
++    invalidate such permission if you have separately received it.
++
++    d) If the work has interactive user interfaces, each must display
++    Appropriate Legal Notices; however, if the Program has interactive
++    interfaces that do not display Appropriate Legal Notices, your
++    work need not make them do so.
++
++  A compilation of a covered work with other separate and independent
++works, which are not by their nature extensions of the covered work,
++and which are not combined with it such as to form a larger program,
++in or on a volume of a storage or distribution medium, is called an
++"aggregate" if the compilation and its resulting copyright are not
++used to limit the access or legal rights of the compilation's users
++beyond what the individual works permit.  Inclusion of a covered work
++in an aggregate does not cause this License to apply to the other
++parts of the aggregate.
++
++  6. Conveying Non-Source Forms.
++
++  You may convey a covered work in object code form under the terms
++of sections 4 and 5, provided that you also convey the
++machine-readable Corresponding Source under the terms of this License,
++in one of these ways:
++
++    a) Convey the object code in, or embodied in, a physical product
++    (including a physical distribution medium), accompanied by the
++    Corresponding Source fixed on a durable physical medium
++    customarily used for software interchange.
++
++    b) Convey the object code in, or embodied in, a physical product
++    (including a physical distribution medium), accompanied by a
++    written offer, valid for at least three years and valid for as
++    long as you offer spare parts or customer support for that product
++    model, to give anyone who possesses the object code either (1) a
++    copy of the Corresponding Source for all the software in the
++    product that is covered by this License, on a durable physical
++    medium customarily used for software interchange, for a price no
++    more than your reasonable cost of physically performing this
++    conveying of source, or (2) access to copy the
++    Corresponding Source from a network server at no charge.
++
++    c) Convey individual copies of the object code with a copy of the
++    written offer to provide the Corresponding Source.  This
++    alternative is allowed only occasionally and noncommercially, and
++    only if you received the object code with such an offer, in accord
++    with subsection 6b.
++
++    d) Convey the object code by offering access from a designated
++    place (gratis or for a charge), and offer equivalent access to the
++    Corresponding Source in the same way through the same place at no
++    further charge.  You need not require recipients to copy the
++    Corresponding Source along with the object code.  If the place to
++    copy the object code is a network server, the Corresponding Source
++    may be on a different server (operated by you or a third party)
++    that supports equivalent copying facilities, provided you maintain
++    clear directions next to the object code saying where to find the
++    Corresponding Source.  Regardless of what server hosts the
++    Corresponding Source, you remain obligated to ensure that it is
++    available for as long as needed to satisfy these requirements.
++
++    e) Convey the object code using peer-to-peer transmission, provided
++    you inform other peers where the object code and Corresponding
++    Source of the work are being offered to the general public at no
++    charge under subsection 6d.
++
++  A separable portion of the object code, whose source code is excluded
++from the Corresponding Source as a System Library, need not be
++included in conveying the object code work.
++
++  A "User Product" is either (1) a "consumer product", which means any
++tangible personal property which is normally used for personal, family,
++or household purposes, or (2) anything designed or sold for incorporation
++into a dwelling.  In determining whether a product is a consumer product,
++doubtful cases shall be resolved in favor of coverage.  For a particular
++product received by a particular user, "normally used" refers to a
++typical or common use of that class of product, regardless of the status
++of the particular user or of the way in which the particular user
++actually uses, or expects or is expected to use, the product.  A product
++is a consumer product regardless of whether the product has substantial
++commercial, industrial or non-consumer uses, unless such uses represent
++the only significant mode of use of the product.
++
++  "Installation Information" for a User Product means any methods,
++procedures, authorization keys, or other information required to install
++and execute modified versions of a covered work in that User Product from
++a modified version of its Corresponding Source.  The information must
++suffice to ensure that the continued functioning of the modified object
++code is in no case prevented or interfered with solely because
++modification has been made.
++
++  If you convey an object code work under this section in, or with, or
++specifically for use in, a User Product, and the conveying occurs as
++part of a transaction in which the right of possession and use of the
++User Product is transferred to the recipient in perpetuity or for a
++fixed term (regardless of how the transaction is characterized), the
++Corresponding Source conveyed under this section must be accompanied
++by the Installation Information.  But this requirement does not apply
++if neither you nor any third party retains the ability to install
++modified object code on the User Product (for example, the work has
++been installed in ROM).
++
++  The requirement to provide Installation Information does not include a
++requirement to continue to provide support service, warranty, or updates
++for a work that has been modified or installed by the recipient, or for
++the User Product in which it has been modified or installed.  Access to a
++network may be denied when the modification itself materially and
++adversely affects the operation of the network or violates the rules and
++protocols for communication across the network.
++
++  Corresponding Source conveyed, and Installation Information provided,
++in accord with this section must be in a format that is publicly
++documented (and with an implementation available to the public in
++source code form), and must require no special password or key for
++unpacking, reading or copying.
++
++  7. Additional Terms.
++
++  "Additional permissions" are terms that supplement the terms of this
++License by making exceptions from one or more of its conditions.
++Additional permissions that are applicable to the entire Program shall
++be treated as though they were included in this License, to the extent
++that they are valid under applicable law.  If additional permissions
++apply only to part of the Program, that part may be used separately
++under those permissions, but the entire Program remains governed by
++this License without regard to the additional permissions.
++
++  When you convey a copy of a covered work, you may at your option
++remove any additional permissions from that copy, or from any part of
++it.  (Additional permissions may be written to require their own
++removal in certain cases when you modify the work.)  You may place
++additional permissions on material, added by you to a covered work,
++for which you have or can give appropriate copyright permission.
++
++  Notwithstanding any other provision of this License, for material you
++add to a covered work, you may (if authorized by the copyright holders of
++that material) supplement the terms of this License with terms:
++
++    a) Disclaiming warranty or limiting liability differently from the
++    terms of sections 15 and 16 of this License; or
++
++    b) Requiring preservation of specified reasonable legal notices or
++    author attributions in that material or in the Appropriate Legal
++    Notices displayed by works containing it; or
++
++    c) Prohibiting misrepresentation of the origin of that material, or
++    requiring that modified versions of such material be marked in
++    reasonable ways as different from the original version; or
++
++    d) Limiting the use for publicity purposes of names of licensors or
++    authors of the material; or
++
++    e) Declining to grant rights under trademark law for use of some
++    trade names, trademarks, or service marks; or
++
++    f) Requiring indemnification of licensors and authors of that
++    material by anyone who conveys the material (or modified versions of
++    it) with contractual assumptions of liability to the recipient, for
++    any liability that these contractual assumptions directly impose on
++    those licensors and authors.
++
++  All other non-permissive additional terms are considered "further
++restrictions" within the meaning of section 10.  If the Program as you
++received it, or any part of it, contains a notice stating that it is
++governed by this License along with a term that is a further
++restriction, you may remove that term.  If a license document contains
++a further restriction but permits relicensing or conveying under this
++License, you may add to a covered work material governed by the terms
++of that license document, provided that the further restriction does
++not survive such relicensing or conveying.
++
++  If you add terms to a covered work in accord with this section, you
++must place, in the relevant source files, a statement of the
++additional terms that apply to those files, or a notice indicating
++where to find the applicable terms.
++
++  Additional terms, permissive or non-permissive, may be stated in the
++form of a separately written license, or stated as exceptions;
++the above requirements apply either way.
++
++  8. Termination.
++
++  You may not propagate or modify a covered work except as expressly
++provided under this License.  Any attempt otherwise to propagate or
++modify it is void, and will automatically terminate your rights under
++this License (including any patent licenses granted under the third
++paragraph of section 11).
++
++  However, if you cease all violation of this License, then your
++license from a particular copyright holder is reinstated (a)
++provisionally, unless and until the copyright holder explicitly and
++finally terminates your license, and (b) permanently, if the copyright
++holder fails to notify you of the violation by some reasonable means
++prior to 60 days after the cessation.
++
++  Moreover, your license from a particular copyright holder is
++reinstated permanently if the copyright holder notifies you of the
++violation by some reasonable means, this is the first time you have
++received notice of violation of this License (for any work) from that
++copyright holder, and you cure the violation prior to 30 days after
++your receipt of the notice.
++
++  Termination of your rights under this section does not terminate the
++licenses of parties who have received copies or rights from you under
++this License.  If your rights have been terminated and not permanently
++reinstated, you do not qualify to receive new licenses for the same
++material under section 10.
++
++  9. Acceptance Not Required for Having Copies.
++
++  You are not required to accept this License in order to receive or
++run a copy of the Program.  Ancillary propagation of a covered work
++occurring solely as a consequence of using peer-to-peer transmission
++to receive a copy likewise does not require acceptance.  However,
++nothing other than this License grants you permission to propagate or
++modify any covered work.  These actions infringe copyright if you do
++not accept this License.  Therefore, by modifying or propagating a
++covered work, you indicate your acceptance of this License to do so.
++
++  10. Automatic Licensing of Downstream Recipients.
++
++  Each time you convey a covered work, the recipient automatically
++receives a license from the original licensors, to run, modify and
++propagate that work, subject to this License.  You are not responsible
++for enforcing compliance by third parties with this License.
++
++  An "entity transaction" is a transaction transferring control of an
++organization, or substantially all assets of one, or subdividing an
++organization, or merging organizations.  If propagation of a covered
++work results from an entity transaction, each party to that
++transaction who receives a copy of the work also receives whatever
++licenses to the work the party's predecessor in interest had or could
++give under the previous paragraph, plus a right to possession of the
++Corresponding Source of the work from the predecessor in interest, if
++the predecessor has it or can get it with reasonable efforts.
++
++  You may not impose any further restrictions on the exercise of the
++rights granted or affirmed under this License.  For example, you may
++not impose a license fee, royalty, or other charge for exercise of
++rights granted under this License, and you may not initiate litigation
++(including a cross-claim or counterclaim in a lawsuit) alleging that
++any patent claim is infringed by making, using, selling, offering for
++sale, or importing the Program or any portion of it.
++
++  11. Patents.
++
++  A "contributor" is a copyright holder who authorizes use under this
++License of the Program or a work on which the Program is based.  The
++work thus licensed is called the contributor's "contributor version".
++
++  A contributor's "essential patent claims" are all patent claims
++owned or controlled by the contributor, whether already acquired or
++hereafter acquired, that would be infringed by some manner, permitted
++by this License, of making, using, or selling its contributor version,
++but do not include claims that would be infringed only as a
++consequence of further modification of the contributor version.  For
++purposes of this definition, "control" includes the right to grant
++patent sublicenses in a manner consistent with the requirements of
++this License.
++
++  Each contributor grants you a non-exclusive, worldwide, royalty-free
++patent license under the contributor's essential patent claims, to
++make, use, sell, offer for sale, import and otherwise run, modify and
++propagate the contents of its contributor version.
++
++  In the following three paragraphs, a "patent license" is any express
++agreement or commitment, however denominated, not to enforce a patent
++(such as an express permission to practice a patent or covenant not to
++sue for patent infringement).  To "grant" such a patent license to a
++party means to make such an agreement or commitment not to enforce a
++patent against the party.
++
++  If you convey a covered work, knowingly relying on a patent license,
++and the Corresponding Source of the work is not available for anyone
++to copy, free of charge and under the terms of this License, through a
++publicly available network server or other readily accessible means,
++then you must either (1) cause the Corresponding Source to be so
++available, or (2) arrange to deprive yourself of the benefit of the
++patent license for this particular work, or (3) arrange, in a manner
++consistent with the requirements of this License, to extend the patent
++license to downstream recipients.  "Knowingly relying" means you have
++actual knowledge that, but for the patent license, your conveying the
++covered work in a country, or your recipient's use of the covered work
++in a country, would infringe one or more identifiable patents in that
++country that you have reason to believe are valid.
++
++  If, pursuant to or in connection with a single transaction or
++arrangement, you convey, or propagate by procuring conveyance of, a
++covered work, and grant a patent license to some of the parties
++receiving the covered work authorizing them to use, propagate, modify
++or convey a specific copy of the covered work, then the patent license
++you grant is automatically extended to all recipients of the covered
++work and works based on it.
++
++  A patent license is "discriminatory" if it does not include within
++the scope of its coverage, prohibits the exercise of, or is
++conditioned on the non-exercise of one or more of the rights that are
++specifically granted under this License.  You may not convey a covered
++work if you are a party to an arrangement with a third party that is
++in the business of distributing software, under which you make payment
++to the third party based on the extent of your activity of conveying
++the work, and under which the third party grants, to any of the
++parties who would receive the covered work from you, a discriminatory
++patent license (a) in connection with copies of the covered work
++conveyed by you (or copies made from those copies), or (b) primarily
++for and in connection with specific products or compilations that
++contain the covered work, unless you entered into that arrangement,
++or that patent license was granted, prior to 28 March 2007.
++
++  Nothing in this License shall be construed as excluding or limiting
++any implied license or other defenses to infringement that may
++otherwise be available to you under applicable patent law.
++
++  12. No Surrender of Others' Freedom.
++
++  If conditions are imposed on you (whether by court order, agreement or
++otherwise) that contradict the conditions of this License, they do not
++excuse you from the conditions of this License.  If you cannot convey a
++covered work so as to satisfy simultaneously your obligations under this
++License and any other pertinent obligations, then as a consequence you may
++not convey it at all.  For example, if you agree to terms that obligate you
++to collect a royalty for further conveying from those to whom you convey
++the Program, the only way you could satisfy both those terms and this
++License would be to refrain entirely from conveying the Program.
++
++  13. Remote Network Interaction; Use with the GNU General Public License.
++
++  Notwithstanding any other provision of this License, if you modify the
++Program, your modified version must prominently offer all users
++interacting with it remotely through a computer network (if your version
++supports such interaction) an opportunity to receive the Corresponding
++Source of your version by providing access to the Corresponding Source
++from a network server at no charge, through some standard or customary
++means of facilitating copying of software.  This Corresponding Source
++shall include the Corresponding Source for any work covered by version 3
++of the GNU General Public License that is incorporated pursuant to the
++following paragraph.
++
++  Notwithstanding any other provision of this License, you have
++permission to link or combine any covered work with a work licensed
++under version 3 of the GNU General Public License into a single
++combined work, and to convey the resulting work.  The terms of this
++License will continue to apply to the part which is the covered work,
++but the work with which it is combined will remain governed by version
++3 of the GNU General Public License.
++
++  14. Revised Versions of this License.
++
++  The Free Software Foundation may publish revised and/or new versions of
++the GNU Affero General Public License from time to time.  Such new versions
++will be similar in spirit to the present version, but may differ in detail to
++address new problems or concerns.
++
++  Each version is given a distinguishing version number.  If the
++Program specifies that a certain numbered version of the GNU Affero General
++Public License "or any later version" applies to it, you have the
++option of following the terms and conditions either of that numbered
++version or of any later version published by the Free Software
++Foundation.  If the Program does not specify a version number of the
++GNU Affero General Public License, you may choose any version ever published
++by the Free Software Foundation.
++
++  If the Program specifies that a proxy can decide which future
++versions of the GNU Affero General Public License can be used, that proxy's
++public statement of acceptance of a version permanently authorizes you
++to choose that version for the Program.
++
++  Later license versions may give you additional or different
++permissions.  However, no additional obligations are imposed on any
++author or copyright holder as a result of your choosing to follow a
++later version.
++
++  15. Disclaimer of Warranty.
++
++  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
++APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
++HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
++OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
++THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
++IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
++ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
++
++  16. Limitation of Liability.
++
++  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
++WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
++THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
++GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
++USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
++DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
++PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
++EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
++SUCH DAMAGES.
++
++  17. Interpretation of Sections 15 and 16.
++
++  If the disclaimer of warranty and limitation of liability provided
++above cannot be given local legal effect according to their terms,
++reviewing courts shall apply local law that most closely approximates
++an absolute waiver of all civil liability in connection with the
++Program, unless a warranty or assumption of liability accompanies a
++copy of the Program in return for a fee.
++
++                     END OF TERMS AND CONDITIONS
++
++            How to Apply These Terms to Your New Programs
++
++  If you develop a new program, and you want it to be of the greatest
++possible use to the public, the best way to achieve this is to make it
++free software which everyone can redistribute and change under these terms.
++
++  To do so, attach the following notices to the program.  It is safest
++to attach them to the start of each source file to most effectively
++state the exclusion of warranty; and each file should have at least
++the "copyright" line and a pointer to where the full notice is found.
++
++    <one line to give the program's name and a brief idea of what it does.>
++    Copyright (C) <year>  <name of author>
++
++    This program is free software: you can redistribute it and/or modify
++    it under the terms of the GNU Affero General Public License as published by
++    the Free Software Foundation, either version 3 of the License, or
++    (at your option) any later version.
++
++    This program is distributed in the hope that it will be useful,
++    but WITHOUT ANY WARRANTY; without even the implied warranty of
++    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++    GNU Affero General Public License for more details.
++
++    You should have received a copy of the GNU Affero General Public License
++    along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++Also add information on how to contact you by electronic and paper mail.
++
++  If your software can interact with users remotely through a computer
++network, you should also make sure that it provides a way for users to
++get its source.  For example, if your program is a web application, its
++interface could display a "Source" link that leads users to an archive
++of the code.  There are many ways you could offer source, and different
++solutions will be better for different programs; see section 13 for the
++specific requirements.
++
++  You should also get your employer (if you work as a programmer) or school,
++if any, to sign a "copyright disclaimer" for the program, if necessary.
++For more information on this, and how to apply and follow the GNU AGPL, see
++<http://www.gnu.org/licenses/>.
+diff --git a/mdpreview/packaging/THIRD-PARTY-NOTICES.txt b/mdpreview/packaging/THIRD-PARTY-NOTICES.txt
+new file mode 100644
+index 0000000..9e8e85d
+--- /dev/null
++++ b/mdpreview/packaging/THIRD-PARTY-NOTICES.txt
+@@ -0,0 +1,1418 @@
++THIRD-PARTY NOTICES for geany-plugin-mdpreview
++==============================================
++
++The mdpreview.so plugin statically links MuPDF 1.29.0 (git commit e1d5bfc0cd9e8f7f52d7a7fdb128335c358ec580,
++unmodified) and the third-party libraries and data files that MuPDF bundles.
++This file reproduces their licence notices, as most of those licences require
++for binary redistribution. It was generated from that MuPDF source tree with
++packaging/gen-notices.sh.
++
++Overall: the plugin source is GPL-2.0-or-later, MuPDF is AGPL-3.0-or-later,
++so the compiled plugin is distributed under the AGPL-3.0 (see AGPL-3.0.txt).
++All components below are compatible with that.
++
++Contents
++  1.  MuPDF (Artifex Software, Inc.) ................ AGPL-3.0-or-later
++  2.  FreeType ...................................... FreeType License (FTL)
++  3.  HarfBuzz ...................................... MIT
++  4.  cmark-gfm ..................................... BSD-2-Clause / MIT parts
++  5.  lcms2 (lcms2mt) ............................... MIT
++  6.  OpenJPEG ..................................... BSD-2-Clause
++  7.  libjpeg (Independent JPEG Group) ............... IJG
++  8.  zlib .......................................... zlib
++  9.  Brotli ........................................ MIT
++ 10.  MuJS .......................................... ISC
++ 11.  Gumbo HTML parser ............................. Apache-2.0
++ 12.  jbig2dec ...................................... AGPL-3.0-or-later
++ 13.  extract ....................................... AGPL-3.0-or-later
++ 14.  Adobe CMap resources .......................... BSD-3-Clause
++ 15.  URW++ base-35 fonts ........................... OFL-1.1
++ 16.  tex-hyphen hyphenation patterns ............... MIT / permissive
++ 17.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
++
++
++================================================================
++1. MuPDF
++
++Copyright (C) 2004-2026 Artifex Software, Inc.
++Licensed under the GNU Affero General Public License, version 3 or (at your
++option) any later version. Full text: AGPL-3.0.txt. Source: https://github.com/ArtifexSoftware/mupdf
++Commercial licences are available from Artifex Software, Inc.
++
++
++================================================================
++2. FreeType
++
++Portions of this software are copyright (c) 2026 The FreeType Project
++(www.freetype.org). All rights reserved.
++
++FreeType is used under the FreeType License (FTL); text follows.
++
++                    The FreeType Project LICENSE
++                    ----------------------------
++
++                            2006-Jan-27
++
++                    Copyright 1996-2002, 2006 by
++          David Turner, Robert Wilhelm, and Werner Lemberg
++
++
++
++Introduction
++============
++
++  The FreeType  Project is distributed in  several archive packages;
++  some of them may contain, in addition to the FreeType font engine,
++  various tools and  contributions which rely on, or  relate to, the
++  FreeType Project.
++
++  This  license applies  to all  files found  in such  packages, and
++  which do not  fall under their own explicit  license.  The license
++  affects  thus  the  FreeType   font  engine,  the  test  programs,
++  documentation and makefiles, at the very least.
++
++  This  license   was  inspired  by  the  BSD,   Artistic,  and  IJG
++  (Independent JPEG  Group) licenses, which  all encourage inclusion
++  and  use of  free  software in  commercial  and freeware  products
++  alike.  As a consequence, its main points are that:
++
++    o We don't promise that this software works. However, we will be
++      interested in any kind of bug reports. (`as is' distribution)
++
++    o You can  use this software for whatever you  want, in parts or
++      full form, without having to pay us. (`royalty-free' usage)
++
++    o You may not pretend that  you wrote this software.  If you use
++      it, or  only parts of it,  in a program,  you must acknowledge
++      somewhere  in  your  documentation  that  you  have  used  the
++      FreeType code. (`credits')
++
++  We  specifically  permit  and  encourage  the  inclusion  of  this
++  software, with  or without modifications,  in commercial products.
++  We  disclaim  all warranties  covering  The  FreeType Project  and
++  assume no liability related to The FreeType Project.
++
++
++  Finally,  many  people  asked  us  for  a  preferred  form  for  a
++  credit/disclaimer to use in compliance with this license.  We thus
++  encourage you to use the following text:
++
++   """
++    Portions of this software are copyright © <year> The FreeType
++    Project (https://freetype.org).  All rights reserved.
++   """
++
++  Please replace <year> with the value from the FreeType version you
++  actually use.
++
++
++Legal Terms
++===========
++
++0. Definitions
++--------------
++
++  Throughout this license,  the terms `package', `FreeType Project',
++  and  `FreeType  archive' refer  to  the  set  of files  originally
++  distributed  by the  authors  (David Turner,  Robert Wilhelm,  and
++  Werner Lemberg) as the `FreeType Project', be they named as alpha,
++  beta or final release.
++
++  `You' refers to  the licensee, or person using  the project, where
++  `using' is a generic term including compiling the project's source
++  code as  well as linking it  to form a  `program' or `executable'.
++  This  program is  referred to  as  `a program  using the  FreeType
++  engine'.
++
++  This  license applies  to all  files distributed  in  the original
++  FreeType  Project,   including  all  source   code,  binaries  and
++  documentation,  unless  otherwise  stated   in  the  file  in  its
++  original, unmodified form as  distributed in the original archive.
++  If you are  unsure whether or not a particular  file is covered by
++  this license, you must contact us to verify this.
++
++  The FreeType  Project is copyright (C) 1996-2000  by David Turner,
++  Robert Wilhelm, and Werner Lemberg.  All rights reserved except as
++  specified below.
++
++1. No Warranty
++--------------
++
++  THE FREETYPE PROJECT  IS PROVIDED `AS IS' WITHOUT  WARRANTY OF ANY
++  KIND, EITHER  EXPRESS OR IMPLIED,  INCLUDING, BUT NOT  LIMITED TO,
++  WARRANTIES  OF  MERCHANTABILITY   AND  FITNESS  FOR  A  PARTICULAR
++  PURPOSE.  IN NO EVENT WILL ANY OF THE AUTHORS OR COPYRIGHT HOLDERS
++  BE LIABLE  FOR ANY DAMAGES CAUSED  BY THE USE OR  THE INABILITY TO
++  USE, OF THE FREETYPE PROJECT.
++
++2. Redistribution
++-----------------
++
++  This  license  grants  a  worldwide, royalty-free,  perpetual  and
++  irrevocable right  and license to use,  execute, perform, compile,
++  display,  copy,   create  derivative  works   of,  distribute  and
++  sublicense the  FreeType Project (in  both source and  object code
++  forms)  and  derivative works  thereof  for  any  purpose; and  to
++  authorize others  to exercise  some or all  of the  rights granted
++  herein, subject to the following conditions:
++
++    o Redistribution of  source code  must retain this  license file
++      (`FTL.TXT') unaltered; any  additions, deletions or changes to
++      the original  files must be clearly  indicated in accompanying
++      documentation.   The  copyright   notices  of  the  unaltered,
++      original  files must  be  preserved in  all  copies of  source
++      files.
++
++    o Redistribution in binary form must provide a  disclaimer  that
++      states  that  the software is based in part of the work of the
++      FreeType Team,  in  the  distribution  documentation.  We also
++      encourage you to put an URL to the FreeType web page  in  your
++      documentation, though this isn't mandatory.
++
++  These conditions  apply to any  software derived from or  based on
++  the FreeType Project,  not just the unmodified files.   If you use
++  our work, you  must acknowledge us.  However, no  fee need be paid
++  to us.
++
++3. Advertising
++--------------
++
++  Neither the  FreeType authors and  contributors nor you  shall use
++  the name of the  other for commercial, advertising, or promotional
++  purposes without specific prior written permission.
++
++  We suggest,  but do not require, that  you use one or  more of the
++  following phrases to refer  to this software in your documentation
++  or advertising  materials: `FreeType Project',  `FreeType Engine',
++  `FreeType library', or `FreeType Distribution'.
++
++  As  you have  not signed  this license,  you are  not  required to
++  accept  it.   However,  as  the FreeType  Project  is  copyrighted
++  material, only  this license, or  another one contracted  with the
++  authors, grants you  the right to use, distribute,  and modify it.
++  Therefore,  by  using,  distributing,  or modifying  the  FreeType
++  Project, you indicate that you understand and accept all the terms
++  of this license.
++
++4. Contacts
++-----------
++
++  There are two mailing lists related to FreeType:
++
++    o freetype@nongnu.org
++
++      Discusses general use and applications of FreeType, as well as
++      future and  wanted additions to the  library and distribution.
++      If  you are looking  for support,  start in  this list  if you
++      haven't found anything to help you in the documentation.
++
++    o freetype-devel@nongnu.org
++
++      Discusses bugs,  as well  as engine internals,  design issues,
++      specific licenses, porting, etc.
++
++  Our home page can be found at
++
++    https://freetype.org
++
++
++--- end of FTL.TXT ---
++
++
++================================================================
++3. HarfBuzz
++
++HarfBuzz is licensed under the so-called "Old MIT" license.  Details follow.
++For parts of HarfBuzz that are licensed under different licenses see individual
++files names COPYING in subdirectories where applicable.
++
++Copyright © 2010-2022  Google, Inc.
++Copyright © 2015-2020  Ebrahim Byagowi
++Copyright © 2019,2020  Facebook, Inc.
++Copyright © 2012,2015  Mozilla Foundation
++Copyright © 2011  Codethink Limited
++Copyright © 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
++Copyright © 2009  Keith Stribley
++Copyright © 2011  Martin Hosken and SIL International
++Copyright © 2007  Chris Wilson
++Copyright © 2005,2006,2020,2021,2022,2023  Behdad Esfahbod
++Copyright © 2004,2007,2008,2009,2010,2013,2021,2022,2023  Red Hat, Inc.
++Copyright © 1998-2005  David Turner and Werner Lemberg
++Copyright © 2016  Igalia S.L.
++Copyright © 2022  Matthias Clasen
++Copyright © 2018,2021  Khaled Hosny
++Copyright © 2018,2019,2020  Adobe, Inc
++Copyright © 2013-2015  Alexei Podtelezhnikov
++
++For full copyright notices consult the individual files in the package.
++
++
++Permission is hereby granted, without written agreement and without
++license or royalty fees, to use, copy, modify, and distribute this
++software and its documentation for any purpose, provided that the
++above copyright notice and the following two paragraphs appear in
++all copies of this software.
++
++IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE TO ANY PARTY FOR
++DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
++ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN
++IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
++DAMAGE.
++
++THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
++BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
++FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
++ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
++PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
++
++
++================================================================
++4. cmark-gfm
++
++Copyright (c) 2014, John MacFarlane
++
++All rights reserved.
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are met:
++
++    * Redistributions of source code must retain the above copyright
++      notice, this list of conditions and the following disclaimer.
++
++    * Redistributions in binary form must reproduce the above
++      copyright notice, this list of conditions and the following
++      disclaimer in the documentation and/or other materials provided
++      with the distribution.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++-----
++
++houdini.h, houdini_href_e.c, houdini_html_e.c, houdini_html_u.c
++
++derive from https://github.com/vmg/houdini (with some modifications)
++
++Copyright (C) 2012 Vicent Martí
++
++Permission is hereby granted, free of charge, to any person obtaining a copy of
++this software and associated documentation files (the "Software"), to deal in
++the Software without restriction, including without limitation the rights to
++use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
++of the Software, and to permit persons to whom the Software is furnished to do
++so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
++
++-----
++
++buffer.h, buffer.c, chunk.h
++
++are derived from code (C) 2012 Github, Inc.
++
++Permission is hereby granted, free of charge, to any person obtaining a copy of
++this software and associated documentation files (the "Software"), to deal in
++the Software without restriction, including without limitation the rights to
++use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
++of the Software, and to permit persons to whom the Software is furnished to do
++so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
++
++-----
++
++utf8.c and utf8.c
++
++are derived from utf8proc
++(<http://www.public-software-group.org/utf8proc>),
++(C) 2009 Public Software Group e. V., Berlin, Germany.
++
++Permission is hereby granted, free of charge, to any person obtaining a
++copy of this software and associated documentation files (the "Software"),
++to deal in the Software without restriction, including without limitation
++the rights to use, copy, modify, merge, publish, distribute, sublicense,
++and/or sell copies of the Software, and to permit persons to whom the
++Software is furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++DEALINGS IN THE SOFTWARE.
++
++-----
++
++The normalization code in normalize.py was derived from the
++markdowntest project, Copyright 2013 Karl Dubost:
++
++The MIT License (MIT)
++
++Copyright (c) 2013 Karl Dubost
++
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of this software and associated documentation files (the
++"Software"), to deal in the Software without restriction, including
++without limitation the rights to use, copy, modify, merge, publish,
++distribute, sublicense, and/or sell copies of the Software, and to
++permit persons to whom the Software is furnished to do so, subject to
++the following conditions:
++
++The above copyright notice and this permission notice shall be
++included in all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
++LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
++OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
++WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++
++-----
++
++The CommonMark spec (test/spec.txt) is
++
++Copyright (C) 2014-15 John MacFarlane
++
++Released under the Creative Commons CC-BY-SA 4.0 license:
++<http://creativecommons.org/licenses/by-sa/4.0/>.
++
++-----
++
++The test software in test/ is
++
++Copyright (c) 2014, John MacFarlane
++
++All rights reserved.
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are met:
++
++    * Redistributions of source code must retain the above copyright
++      notice, this list of conditions and the following disclaimer.
++
++    * Redistributions in binary form must reproduce the above
++      copyright notice, this list of conditions and the following
++      disclaimer in the documentation and/or other materials provided
++      with the distribution.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++================================================================
++5. lcms2 (lcms2mt)
++
++MIT License
++
++Copyright (c) 2023 Marti Maria Saguer
++
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of this software and associated documentation files (the
++"Software"), to deal in the Software without restriction, including
++without limitation the rights to use, copy, modify, merge, publish,
++distribute, sublicense, and/or sell copies of the Software, and to
++permit persons to whom the Software is furnished to do so, subject
++to the following conditions:
++
++The above copyright notice and this permission notice shall be
++included in all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
++IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
++CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
++TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
++SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++
++
++================================================================
++6. OpenJPEG
++
++/*
++ * The copyright in this software is being made available under the 2-clauses
++ * BSD License, included below. This software may be subject to other third
++ * party and contributor rights, including patent rights, and no such rights
++ * are granted under this license.
++ *
++ * Copyright (c) 2002-2014, Universite catholique de Louvain (UCL), Belgium
++ * Copyright (c) 2002-2014, Professor Benoit Macq
++ * Copyright (c) 2003-2014, Antonin Descampe
++ * Copyright (c) 2003-2009, Francois-Olivier Devaux
++ * Copyright (c) 2005, Herve Drolon, FreeImage Team
++ * Copyright (c) 2002-2003, Yannick Verschueren
++ * Copyright (c) 2001-2003, David Janssens
++ * Copyright (c) 2011-2012, Centre National d'Etudes Spatiales (CNES), France
++ * Copyright (c) 2012, CS Systemes d'Information, France
++ *
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS `AS IS'
++ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
++ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
++ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
++ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
++ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
++ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
++ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
++ * POSSIBILITY OF SUCH DAMAGE.
++ */
++
++
++================================================================
++7. libjpeg (Independent JPEG Group)
++
++This software is based in part on the work of the Independent JPEG Group.
++
++LEGAL ISSUES
++============
++
++In plain English:
++
++1. We don't promise that this software works.  (But if you find any bugs,
++   please let us know!)
++2. You can use this software for whatever you want.  You don't have to pay us.
++3. You may not pretend that you wrote this software.  If you use it in a
++   program, you must acknowledge somewhere in your documentation that
++   you've used the IJG code.
++
++In legalese:
++
++The authors make NO WARRANTY or representation, either express or implied,
++with respect to this software, its quality, accuracy, merchantability, or
++fitness for a particular purpose.  This software is provided "AS IS", and you,
++its user, assume the entire risk as to its quality and accuracy.
++
++This software is copyright (C) 1991-2026, Thomas G. Lane, Guido Vollbeding.
++All Rights Reserved except as specified below.
++
++Permission is hereby granted to use, copy, modify, and distribute this
++software (or portions thereof) for any purpose, without fee, subject to these
++conditions:
++(1) If any part of the source code for this software is distributed, then this
++README file must be included, with this copyright and no-warranty notice
++unaltered; and any additions, deletions, or changes to the original files
++must be clearly indicated in accompanying documentation.
++(2) If only executable code is distributed, then the accompanying
++documentation must state that "this software is based in part on the work of
++the Independent JPEG Group".
++(3) Permission for use of this software is granted only if the user accepts
++full responsibility for any undesirable consequences; the authors accept
++NO LIABILITY for damages of any kind.
++
++These conditions apply to any software derived from or based on the IJG code,
++not just to the unmodified library.  If you use our work, you ought to
++acknowledge us.
++
++Permission is NOT granted for the use of any IJG author's name or company name
++in advertising or publicity relating to this software or products derived from
++it.  This software may be referred to only as "the Independent JPEG Group's
++software".
++
++We specifically permit and encourage the use of this software as the basis of
++commercial products, provided that all warranty or liability claims are
++assumed by the product vendor.
++
++
++The Unix configuration script "configure" was produced with GNU Autoconf.
++It is copyright by the Free Software Foundation but is freely distributable.
++The same holds for its supporting scripts (config.guess, config.sub,
++ltmain.sh).  Another support script, install-sh, is copyright by X Consortium
++but is also freely distributable.
++
++
++
++
++================================================================
++8. zlib
++
++Copyright notice:
++
++ (C) 1995-2026 Jean-loup Gailly and Mark Adler
++
++  This software is provided 'as-is', without any express or implied
++  warranty.  In no event will the authors be held liable for any damages
++  arising from the use of this software.
++
++  Permission is granted to anyone to use this software for any purpose,
++  including commercial applications, and to alter it and redistribute it
++  freely, subject to the following restrictions:
++
++  1. The origin of this software must not be misrepresented; you must not
++     claim that you wrote the original software. If you use this software
++     in a product, an acknowledgment in the product documentation would be
++     appreciated but is not required.
++  2. Altered source versions must be plainly marked as such, and must not be
++     misrepresented as being the original software.
++  3. This notice may not be removed or altered from any source distribution.
++
++  Jean-loup Gailly        Mark Adler
++  jloup@gzip.org          madler@alumni.caltech.edu
++
++
++================================================================
++9. Brotli
++
++Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++THE SOFTWARE.
++
++
++================================================================
++10. MuJS
++
++ISC License
++
++Copyright (c) 2013-2020 Artifex Software, Inc.
++
++Permission to use, copy, modify, and/or distribute this software for any
++purpose with or without fee is hereby granted, provided that the above
++copyright notice and this permission notice appear in all copies.
++
++THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
++REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
++AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
++INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
++LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
++OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
++PERFORMANCE OF THIS SOFTWARE.
++
++
++
++================================================================
++11. Gumbo HTML parser
++
++Copyright 2010 Google Inc. All Rights Reserved.
++Licensed under the Apache License, Version 2.0. Full text:
++/usr/share/common-licenses/Apache-2.0 on Debian systems, or
++http://www.apache.org/licenses/LICENSE-2.0
++
++
++================================================================
++12. jbig2dec
++
++  The files in this directory (folder) and any subdirectories
++  (sub-folders) thereof are part of jbig2dec, with the exception
++  of certain source files included to support portability which are
++  marked otherwise in their copyright headers.
++
++  jbig2dec is free software; you can redistribute it and/or modify
++  it under the terms the GNU Affero General Public License as
++  published by the Free Software Foundation, either version 3 of the
++  License, or (at your option) any later version.
++
++  This software is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License for more details.
++
++  You should have received a copy of the GNU Affero General Public
++  License along with this program in the file named COPYING. If not,
++  write  to the Free Software Foundation, Inc., 59 Temple Place Suite
++  330, Boston, MA 02111-1307, USA.
++
++  In addition, specific permission is given to link jbig2dec to or
++  compile jbig2dec into AFPL Ghostscript and to distribute same
++  under the Aladdin Free Public License (AFPL) version 9.
++(Full AGPL-3.0 text: AGPL-3.0.txt)
++
++
++================================================================
++13. extract
++
++                    GNU AFFERO GENERAL PUBLIC LICENSE
++                       Version 3, 19 November 2007
++
++ Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
++ Everyone is permitted to copy and distribute verbatim copies
++ of this license document, but changing it is not allowed.
++
++                            Preamble
++
++  The GNU Affero General Public License is a free, copyleft license for
++software and other kinds of works, specifically designed to ensure
++cooperation with the community in the case of network server software.
++(AGPL-3.0, Artifex Software, Inc.; full text: AGPL-3.0.txt)
++
++
++================================================================
++14. Adobe CMap resources
++
++Copyright 1990-2015 Adobe Systems Incorporated.
++All rights reserved.
++Redistribution and use in source and binary forms, with or
++without modification, are permitted provided that the
++following conditions are met:
++Redistributions of source code must retain the above
++copyright notice, this list of conditions and the following
++disclaimer.
++Redistributions in binary form must reproduce the above
++copyright notice, this list of conditions and the following
++disclaimer in the documentation and/or other materials
++provided with the distribution.
++Neither the name of Adobe Systems Incorporated nor the names
++of its contributors may be used to endorse or promote
++products derived from this software without specific prior
++written permission.
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
++CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
++INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
++MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
++CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
++NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
++LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
++CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++================================================================
++15. URW++ base-35 fonts (Nimbus, Dingbats, Standard Symbols PS)
++
++Copyright 2016 by (URW)++ Design & Development.
++
++This Font Software is licensed under the SIL Open Font License, Version 1.1.
++This license is copied below, and is also available with a FAQ at:
++http://scripts.sil.org/OFL
++
++-----------------------------------------------------------
++SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
++-----------------------------------------------------------
++
++PREAMBLE
++The goals of the Open Font License (OFL) are to stimulate worldwide
++development of collaborative font projects, to support the font creation
++efforts of academic and linguistic communities, and to provide a free and
++open framework in which fonts may be shared and improved in partnership
++with others.
++
++The OFL allows the licensed fonts to be used, studied, modified and
++redistributed freely as long as they are not sold by themselves. The
++fonts, including any derivative works, can be bundled, embedded,
++redistributed and/or sold with any software provided that any reserved
++names are not used by derivative works. The fonts and derivatives,
++however, cannot be released under any other type of license. The
++requirement for fonts to remain under this license does not apply
++to any document created using the fonts or their derivatives.
++
++DEFINITIONS
++"Font Software" refers to the set of files released by the Copyright
++Holder(s) under this license and clearly marked as such. This may
++include source files, build scripts and documentation.
++
++"Reserved Font Name" refers to any names specified as such after the
++copyright statement(s).
++
++"Original Version" refers to the collection of Font Software components as
++distributed by the Copyright Holder(s).
++
++"Modified Version" refers to any derivative made by adding to, deleting,
++or substituting -- in part or in whole -- any of the components of the
++Original Version, by changing formats or by porting the Font Software to a
++new environment.
++
++"Author" refers to any designer, engineer, programmer, technical
++writer or other person who contributed to the Font Software.
++
++PERMISSION & CONDITIONS
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of the Font Software, to use, study, copy, merge, embed, modify,
++redistribute, and sell modified and unmodified copies of the Font
++Software, subject to the following conditions:
++
++1) Neither the Font Software nor any of its individual components,
++in Original or Modified Versions, may be sold by itself.
++
++2) Original or Modified Versions of the Font Software may be bundled,
++redistributed and/or sold with any software, provided that each copy
++contains the above copyright notice and this license. These can be
++included either as stand-alone text files, human-readable headers or
++in the appropriate machine-readable metadata fields within text or
++binary files as long as those fields can be easily viewed by the user.
++
++3) No Modified Version of the Font Software may use the Reserved Font
++Name(s) unless explicit written permission is granted by the corresponding
++Copyright Holder. This restriction only applies to the primary font name as
++presented to the users.
++
++4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
++Software shall not be used to promote, endorse or advertise any
++Modified Version, except to acknowledge the contribution(s) of the
++Copyright Holder(s) and the Author(s) or with their explicit written
++permission.
++
++5) The Font Software, modified or unmodified, in part or in whole,
++must be distributed entirely under this license, and must not be
++distributed under any other license. The requirement for fonts to
++remain under this license does not apply to any document created
++using the Font Software.
++
++TERMINATION
++This license becomes null and void if any of the above conditions are
++not met.
++
++DISCLAIMER
++THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
++OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
++COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
++DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
++OTHER DEALINGS IN THE FONT SOFTWARE.
++
++
++================================================================
++16. tex-hyphen hyphenation patterns
++
++Languages built in: bn de en es fr gu hi it kn mr pt ru ta te th tr 
++Source: https://github.com/hyphenation/tex-hyphen. Licence header of each pattern set:
++
++--- hyph-bn.info ---
++title: Hyphenation patterns for Bengali
++copyright: Copyright (C) 2016 Santhosh Thottingal
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++source: https://github.com/santhoshtr/hyphenation/
++language:
++licence:
++    - This file is available under any of the following licences:
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++    -
++        name: LGPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/lgpl.html
++    -
++        name: GPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/gpl.html
++
++--- hyph-de-1996.info ---
++title: German Hyphenation Patterns (Reformed Orthography, 2006)
++
++notice: TeX-Trennmuster für die reformierte (2006) deutsche Rechtschreibung
++
++version: 2024-02-28
++
++authors:
++  -
++    name:    Deutschsprachige Trennmustermannschaft
++    contact: trennmuster@dante.de
++
++copyright: Copyright (c) 2013-2024
++           Stephan Hennig, Werner Lemberg, Günter Milde,
++           Sander van Geloven, Georg Pfeiffer, Gisbert W. Selke,
++           Tobias Wendorf, Keno Wehr
++
++licence:
++licence:
++    name: MIT
++    name: MIT
++    url:  https://opensource.org/licenses/mit-license.php
++    url:  https://opensource.org/licenses/mit-license.php
++    text: >
++    text: >
++          Permission is hereby granted, free of charge, to any person
++          Permission is hereby granted, free of charge, to any person
++          obtaining a copy of this software and associated documentation
++          obtaining a copy of this software and associated documentation
++          files (the “Software”), to deal in the Software without
++          files (the “Software”), to deal in the Software without
++          restriction, including without limitation the rights to use,
++          restriction, including without limitation the rights to use,
++          copy, modify, merge, publish, distribute, sublicense, and/or
++          copy, modify, merge, publish, distribute, sublicense, and/or
++          sell copies of the Software, and to permit persons to whom the
++          sell copies of the Software, and to permit persons to whom the
++          Software is furnished to do so, subject to the following
++          Software is furnished to do so, subject to the following
++          conditions:
++          conditions:
++
++
++          The above copyright notice and this permission notice shall be
++          The above copyright notice and this permission notice shall be
++          included in all copies or substantial portions of the Software.
++          included in all copies or substantial portions of the Software.
++
++
++          THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND,
++          THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND,
++          EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++          EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++          OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++          OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++          NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++          NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++          HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++          HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++          WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++          WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++          FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++          FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++          OTHER DEALINGS IN THE SOFTWARE.
++          OTHER DEALINGS IN THE SOFTWARE.
++
++
++source: https://repo.or.cz/w/wortliste.git?a=commit;h=304aaa2188a75e57afe36bad0443d90a9c715b8e
++source: https://repo.or.cz/w/wortliste.git?a=commit;h=304aaa2188a75e57afe36bad0443d90a9c715b8e
++
++
++language:
++language:
++    name: German, reformed spelling
++    tag:  de-1996
++
++
++--- hyph-en-us.info ---
++title: Hyphenation patterns for American English
++copyright: Copyright (C) 1990, 2004, 2005 Gerard D.C. Kuiken
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    text: >
++        Copying and distribution of this file, with or without modification,
++        are permitted in any medium without royalty provided the copyright
++        notice and this notice are preserved.
++
++--- hyph-es.info ---
++title: Hyphenation patterns for Spanish
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    name: MIT/X11
++    url: https://opensource.org/licenses/MIT
++    text: >
++        Permission is hereby granted, free of charge, to any person obtaining a copy
++        of this software and associated documentation files (the "Software"), to deal
++        in the Software without restriction, including without limitation the rights
++        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++        copies of the Software, and to permit persons to whom the Software is
++        furnished to do so, subject to the following conditions:
++
++        The above copyright notice and this permission notice shall be included in
++        all copies or substantial portions of the Software.
++
++        THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++        SOFTWARE.
++
++--- hyph-fr.info ---
++title: Hyphenation patterns for French
++copyright: Copyright (C) 1994-2002 Daniel Flipo, Bernard Gaulle, 2016 Arthur Reutenauer
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    name: MIT
++    url: https://opensource.org/licenses/MIT
++    text: >
++        Permission is hereby granted, free of charge, to any person obtaining
++        a copy of this software and associated documentation files (the
++        "Software"), to deal in the Software without restriction, including
++        without limitation the rights to use, copy, modify, merge, publish,
++        distribute, sublicense, and/or sell copies of the Software, and to
++        permit persons to whom the Software is furnished to do so, subject to
++        the following conditions:
++
++        The above copyright notice and this permission notice shall be
++        included in all copies or substantial portions of the Software.
++
++        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++        EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++        MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++        NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
++        BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
++        ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
++        CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++        SOFTWARE.
++
++--- hyph-gu.info ---
++title: Hyphenation patterns for Gujarati
++copyright: Copyright (C) 2016 Santhosh Thottingal
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++source: https://github.com/santhoshtr/hyphenation/
++language:
++licence:
++    - This file is available under any of the following licences:
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++    -
++        name: LGPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/lgpl.html
++    -
++        name: GPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/gpl.html
++
++--- hyph-hi.info ---
++title: Hyphenation patterns for Hindi
++copyright: Copyright (C) 2016 Santhosh Thottingal
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++source: https://github.com/santhoshtr/hyphenation/
++language:
++licence:
++    - This file is available under any of the following licences:
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++    -
++        name: LGPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/lgpl.html
++    -
++        name: GPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/gpl.html
++
++--- hyph-it.info ---
++title: Hyphenation patterns for Italian
++copyright: Copyright (C) 2008-2011 Claudio Beccari
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    - This file is available under any of the following licences:
++    -
++        name: LPPL
++        version: 1.3
++        or_later: true
++        url: http://www.latex-project.org/lppl.txt
++        status: maintained
++        maintainer: Claudio Beccari, e-mail claudio dot beccari at gmail dot com
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++
++--- hyph-kn.info ---
++title: Hyphenation patterns for Kannada
++copyright: Copyright (C) 2016 Santhosh Thottingal
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++source: https://github.com/santhoshtr/hyphenation/
++language:
++licence:
++    - This file is available under any of the following licences:
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++    -
++        name: LGPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/lgpl.html
++    -
++        name: GPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/gpl.html
++
++--- hyph-mr.info ---
++title: Hyphenation patterns for Marathi
++copyright: Copyright (C) 2016 Santhosh Thottingal
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++source: https://github.com/santhoshtr/hyphenation/
++language:
++licence:
++    - This file is available under any of the following licences, at your option:
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++    -
++        name: LGPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/lgpl.html
++    -
++        name: GPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/gpl.html
++
++--- hyph-pt.info ---
++title: Hyphenation patterns for Portuguese
++copyright: Copyright (C) 1987, 1994, 1996, 2015 Pedro J. de Rezende, 1996, 2015 J. Joao Dias Almeida, 2024 Leonardo Araujo and Aline Benevides
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    name: BSD 3-clause licence
++    url: https://opensource.org/licenses/BSD-3-Clause
++    text: >
++        Redistribution and use in source and binary forms, with or without
++        modification, are permitted provided that the following conditions
++        are met:
++        * Redistributions of source code must retain the above copyright
++          notice, this list of conditions and the following disclaimer.
++        * Redistributions in binary form must reproduce the above copyright
++          notice, this list of conditions and the following disclaimer in the
++          documentation and/or other materials provided with the
++          distribution.
++        * Neither the name of the University of Campinas, of the University
++          of Minho nor the names of its contributors may be used to endorse
++          or promote products derived from this software without specific
++          prior written permission.
++
++        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++        "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++        LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++        A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PEDRO J. DE
++        REZENDE OR J.JOAO DIAS ALMEIDA BE LIABLE FOR ANY DIRECT, INDIRECT,
++        INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
++        BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
++        OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
++        AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++        LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
++        WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
++        POSSIBILITY OF SUCH DAMAGE.
++
++--- hyph-ru.info ---
++title: Hyphenation patterns for Russian
++copyright: Copyright (C) 1999-2003 Alexander I. Lebedev
++notice:
++    This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    name: LPPL
++    version: 1.2
++    or_later: true
++    url: https://latex-project.org/lppl/
++
++--- hyph-ta.info ---
++title: Hyphenation patterns for Tamil
++copyright: Copyright (C) 2016 Santhosh Thottingal
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++source: https://github.com/santhoshtr/hyphenation/
++language:
++licence:
++    - This file is available under any of the following licences:
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++    -
++        name: LGPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/lgpl.html
++    -
++        name: GPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/gpl.html
++
++--- hyph-te.info ---
++title: Hyphenation patterns for Telugu
++copyright: Copyright (C) 2016 Santhosh Thottingal
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++source: https://github.com/santhoshtr/hyphenation/
++language:
++licence:
++    - This file is available under any of the following licences:
++    -
++        name: MIT
++        url: https://opensource.org/licenses/MIT
++        text: >
++            Permission is hereby granted, free of charge, to any person
++            obtaining a copy of this software and associated documentation
++            files (the "Software"), to deal in the Software without
++            restriction, including without limitation the rights to use,
++            copy, modify, merge, publish, distribute, sublicense, and/or sell
++            copies of the Software, and to permit persons to whom the
++            Software is furnished to do so, subject to the following
++            conditions:
++
++            The above copyright notice and this permission notice shall be
++            included in all copies or substantial portions of the Software.
++
++            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++            EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++            OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++            HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++            WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++            FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++            OTHER DEALINGS IN THE SOFTWARE.
++    -
++        name: LGPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/lgpl.html
++    -
++        name: GPL
++        version: 3
++        or_later: true
++        url: http://www.gnu.org/licenses/gpl.html
++
++--- hyph-th.info ---
++title: Hyphenation patterns for Thai
++copyright: Copyright (C) 2012-2013 Theppitak Karoonboonyanan
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    name: LPPL
++    version: 1.3
++    or_later: true
++    status: maintained
++    maintainer: Theppitak Karoonboonyanan
++    url: https://latex-project.org/lppl/
++
++--- hyph-tr.info ---
++title: Hyphenation patterns for Turkish
++copyright: Copyright (C) 1987 Pierre A. MacKay, 2008, 2011 TUG
++notice: This file is part of the hyph-utf8 package.
++    See http://www.hyphenation.org/tex for more information.
++language:
++licence:
++    name: LPPL
++    version: 1
++    or_later: true
++    url: https://latex-project.org/lppl/lppl-1-0.html
++
++
++================================================================
++17. Artifex ICC colour profiles
++
++Copyright Artifex Software. Part of MuPDF, distributed under the AGPL-3.0-or-later.
+diff --git a/mdpreview/packaging/copyright b/mdpreview/packaging/copyright
+new file mode 100644
+index 0000000..5a89e96
+--- /dev/null
++++ b/mdpreview/packaging/copyright
+@@ -0,0 +1,66 @@
++Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
++Upstream-Name: Markdown Preview (MuPDF) for Geany
++Upstream-Contact: Matti Palmström <sjukfan@gmail.com>
++Source: @HOMEPAGE@
++
++Files: *
++Copyright: 2026 Matti Palmström <sjukfan@gmail.com>
++License: GPL-2+
++Comment: The plugin source code. Written with assistance from Claude (Anthropic).
++
++Files: usr/lib/*/geany/mdpreview.so
++Copyright: 2026 Matti Palmström <sjukfan@gmail.com>
++ 2004-2026 Artifex Software, Inc. (MuPDF and its bundled libraries)
++ and the other copyright holders listed in THIRD-PARTY-NOTICES.txt
++License: AGPL-3+
++Comment: The compiled plugin statically links MuPDF @MUPDF_VERSION@
++ (git commit @MUPDF_COMMIT@, unmodified).
++ Because MuPDF is AGPL-3.0-or-later, this binary as a whole is distributed
++ under the AGPL-3.0 or any later version. The notices for MuPDF's bundled
++ third-party code and data (FreeType, HarfBuzz, cmark-gfm, lcms2, OpenJPEG,
++ libjpeg, zlib, Brotli, MuJS, Gumbo, jbig2dec, extract, Adobe CMaps,
++ URW++ fonts, hyphenation patterns) are in THIRD-PARTY-NOTICES.txt.
++ This software is based in part on the work of the Independent JPEG Group.
++ Portions of this software are copyright (c) @FTYEAR@ The FreeType Project
++ (www.freetype.org). All rights reserved.
++
++License: GPL-2+
++ This program is free software; you can redistribute it and/or modify
++ it under the terms of the GNU General Public License as published by
++ the Free Software Foundation; either version 2 of the License, or
++ (at your option) any later version.
++ .
++ This program is distributed in the hope that it will be useful,
++ but WITHOUT ANY WARRANTY; without even the implied warranty of
++ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ GNU General Public License for more details.
++ .
++ On Debian systems, the complete text of the GNU General Public
++ License version 2 can be found in "/usr/share/common-licenses/GPL-2".
++
++License: AGPL-3+
++ This program is free software: you can redistribute it and/or modify
++ it under the terms of the GNU Affero General Public License as
++ published by the Free Software Foundation, either version 3 of the
++ License, or (at your option) any later version.
++ .
++ This program is distributed in the hope that it will be useful,
++ but WITHOUT ANY WARRANTY; without even the implied warranty of
++ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ GNU Affero General Public License for more details.
++ .
++ The complete text of the GNU Affero General Public License version 3
++ is in "/usr/share/doc/geany-plugin-mdpreview/AGPL-3.0.txt".
++
++# Corresponding source (AGPL-3.0 section 6)
++#
++# The complete source of this package is available, at no charge, from:
++#   plugin:  @HOMEPAGE@  (tag v@VERSION@)
++#   MuPDF:   https://github.com/ArtifexSoftware/mupdf, commit @MUPDF_COMMIT@
++#            (a copy is attached to the plugin's release page as
++#            mupdf-@MUPDF_VERSION@-@MUPDF_SHORT@-source.tar.xz)
++# In addition, Matti Palmström <sjukfan@gmail.com> will, on request, provide
++# anyone who has received this binary with a copy of the complete
++# corresponding source on a durable medium, for a charge no more than the
++# cost of doing so. This offer is valid for three years from the date of
++# this package, or for as long as the binary is distributed.
+diff --git a/mdpreview/packaging/gen-notices.sh b/mdpreview/packaging/gen-notices.sh
+new file mode 100644
+index 0000000..1061c4b
+--- /dev/null
++++ b/mdpreview/packaging/gen-notices.sh
+@@ -0,0 +1,126 @@
++#!/bin/sh
++# Regenerate THIRD-PARTY-NOTICES.txt from a MuPDF source tree.
++# Usage: sh gen-notices.sh /path/to/mupdf > THIRD-PARTY-NOTICES.txt
++set -e
++M=${1:?usage: sh gen-notices.sh /path/to/mupdf}
++test -f "$M/include/mupdf/fitz.h" || { echo "not a MuPDF tree: $M" >&2; exit 1; }
++
++VER=$(sed -n 's/^#define FZ_VERSION "\(.*\)"/\1/p' "$M/include/mupdf/fitz/version.h")
++COMMIT=$(git -C "$M" rev-parse HEAD 2>/dev/null || echo unknown)
++FTYEAR=$(sed -n 's/^CHANGES BETWEEN .* (\([0-9]*\)-.*/\1/p' "$M/thirdparty/freetype/docs/CHANGES" | head -1)
++
++sect() { printf '\n\n%s\n%s\n\n' "================================================================" "$1"; }
++file() { sed 's/[[:space:]]*$//' "$1"; }
++
++cat <<HDR
++THIRD-PARTY NOTICES for geany-plugin-mdpreview
++==============================================
++
++The mdpreview.so plugin statically links MuPDF $VER (git commit $COMMIT,
++unmodified) and the third-party libraries and data files that MuPDF bundles.
++This file reproduces their licence notices, as most of those licences require
++for binary redistribution. It was generated from that MuPDF source tree with
++packaging/gen-notices.sh.
++
++Overall: the plugin source is GPL-2.0-or-later, MuPDF is AGPL-3.0-or-later,
++so the compiled plugin is distributed under the AGPL-3.0 (see AGPL-3.0.txt).
++All components below are compatible with that.
++
++Contents
++  1.  MuPDF (Artifex Software, Inc.) ................ AGPL-3.0-or-later
++  2.  FreeType ...................................... FreeType License (FTL)
++  3.  HarfBuzz ...................................... MIT
++  4.  cmark-gfm ..................................... BSD-2-Clause / MIT parts
++  5.  lcms2 (lcms2mt) ............................... MIT
++  6.  OpenJPEG ..................................... BSD-2-Clause
++  7.  libjpeg (Independent JPEG Group) ............... IJG
++  8.  zlib .......................................... zlib
++  9.  Brotli ........................................ MIT
++ 10.  MuJS .......................................... ISC
++ 11.  Gumbo HTML parser ............................. Apache-2.0
++ 12.  jbig2dec ...................................... AGPL-3.0-or-later
++ 13.  extract ....................................... AGPL-3.0-or-later
++ 14.  Adobe CMap resources .......................... BSD-3-Clause
++ 15.  URW++ base-35 fonts ........................... OFL-1.1
++ 16.  tex-hyphen hyphenation patterns ............... MIT / permissive
++ 17.  Artifex ICC colour profiles ................... part of MuPDF (AGPL)
++HDR
++
++sect "1. MuPDF"
++cat <<EOT
++Copyright (C) 2004-2026 Artifex Software, Inc.
++Licensed under the GNU Affero General Public License, version 3 or (at your
++option) any later version. Full text: AGPL-3.0.txt. Source: https://github.com/ArtifexSoftware/mupdf
++Commercial licences are available from Artifex Software, Inc.
++EOT
++
++sect "2. FreeType"
++cat <<EOT
++Portions of this software are copyright (c) $FTYEAR The FreeType Project
++(www.freetype.org). All rights reserved.
++
++FreeType is used under the FreeType License (FTL); text follows.
++EOT
++printf '\n'; file "$M/thirdparty/freetype/docs/FTL.TXT"
++
++sect "3. HarfBuzz"
++file "$M/thirdparty/harfbuzz/COPYING"
++
++sect "4. cmark-gfm"
++file "$M/thirdparty/cmark-gfm/COPYING"
++
++sect "5. lcms2 (lcms2mt)"
++file "$M/thirdparty/lcms2/LICENSE"
++
++sect "6. OpenJPEG"
++file "$M/thirdparty/openjpeg/LICENSE"
++
++sect "7. libjpeg (Independent JPEG Group)"
++cat <<EOT
++This software is based in part on the work of the Independent JPEG Group.
++
++EOT
++file "$M/thirdparty/libjpeg/README" | sed -n '/^LEGAL ISSUES$/,/^REFERENCES$/p' | sed '$d'
++
++sect "8. zlib"
++file "$M/thirdparty/zlib/LICENSE"
++
++sect "9. Brotli"
++file "$M/thirdparty/brotli/LICENSE"
++
++sect "10. MuJS"
++file "$M/thirdparty/mujs/COPYING"
++
++sect "11. Gumbo HTML parser"
++cat <<EOT
++Copyright 2010 Google Inc. All Rights Reserved.
++Licensed under the Apache License, Version 2.0. Full text:
++/usr/share/common-licenses/Apache-2.0 on Debian systems, or
++http://www.apache.org/licenses/LICENSE-2.0
++EOT
++
++sect "12. jbig2dec"
++file "$M/thirdparty/jbig2dec/LICENSE"
++echo "(Full AGPL-3.0 text: AGPL-3.0.txt)"
++
++sect "13. extract"
++head -12 "$M/thirdparty/extract/COPYING" | sed 's/[[:space:]]*$//'
++echo "(AGPL-3.0, Artifex Software, Inc.; full text: AGPL-3.0.txt)"
++
++sect "14. Adobe CMap resources"
++sed -n 's/^%%Copyright: \{0,1\}//p' "$M/resources/cmaps/90ms-RKSJ-H" | sed '/^-*$/d' | sed 's/[[:space:]]*$//'
++
++sect "15. URW++ base-35 fonts (Nimbus, Dingbats, Standard Symbols PS)"
++file "$M/resources/fonts/urw/OFL.txt"
++
++sect "16. tex-hyphen hyphenation patterns"
++echo "Languages built in: $(unzip -Z1 "$M/resources/hyphen/hyph-std.zip" | tr '\n' ' ')"
++echo "Source: https://github.com/hyphenation/tex-hyphen. Licence header of each pattern set:"
++for l in $(unzip -Z1 "$M/resources/hyphen/hyph-std.zip"); do
++  f=$(ls "$M"/resources/hyphen/license/hyph-"$l"*.info | head -1)
++  printf '\n--- %s ---\n' "$(basename "$f")"
++  sed -n '/^% title/,/^% language/p;/^% licence/,/^% hyphenmins/p' "$f" | sed '$d' | sed 's/^% \{0,1\}//' | sed 's/[[:space:]]*$//'
++done
++
++sect "17. Artifex ICC colour profiles"
++echo "Copyright Artifex Software. Part of MuPDF, distributed under the AGPL-3.0-or-later."
+diff --git a/mdpreview/packaging/make-mupdf-source.sh b/mdpreview/packaging/make-mupdf-source.sh
+new file mode 100644
+index 0000000..41852dd
+--- /dev/null
++++ b/mdpreview/packaging/make-mupdf-source.sh
+@@ -0,0 +1,14 @@
++#!/bin/sh
++# Pack the MuPDF source tree you built the plugin from, for attaching to the
++# plugin's release page (this is what the AGPL "corresponding source" offer
++# in the .deb points to).
++# Usage: sh packaging/make-mupdf-source.sh [/path/to/mupdf]   (default ../../mupdf)
++set -e
++M=${1:-../../mupdf}
++VER=$(sed -n 's/^#define FZ_VERSION "\(.*\)"/\1/p' "$M/include/mupdf/fitz/version.h")
++COMMIT=$(git -C "$M" rev-parse HEAD | cut -c1-8)
++OUT=$PWD/mupdf-$VER-$COMMIT-source.tar.xz
++D=$(cd "$M" && pwd)
++tar -C "$(dirname "$D")" --exclude='*/build' --exclude='.git' --transform "s,^$(basename "$D"),mupdf-$VER-$COMMIT," \
++    -cJf "$OUT" "$(basename "$D")"
++echo "$OUT"
+diff --git a/mdpreview/src/Makefile.am b/mdpreview/src/Makefile.am
+new file mode 100644
+index 0000000..9d819f2
+--- /dev/null
++++ b/mdpreview/src/Makefile.am
+@@ -0,0 +1,15 @@
++include $(top_srcdir)/build/vars.build.mk
++plugin = mdpreview
++
++geanyplugins_LTLIBRARIES = mdpreview.la
++
++mdpreview_la_SOURCES = mdpreview.c
++
++mdpreview_la_CPPFLAGS = $(AM_CPPFLAGS) \
++	-DG_LOG_DOMAIN=\"MDPreview\"
++mdpreview_la_CFLAGS = $(AM_CFLAGS) $(MUPDF_CFLAGS)
++mdpreview_la_LIBADD = $(COMMONLIBS) $(MUPDF_LIBS)
++# keep MuPDF's thousands of symbols private to the plugin
++mdpreview_la_LDFLAGS = $(AM_LDFLAGS) -Wl,--exclude-libs,ALL
++
++include $(top_srcdir)/build/cppcheck.mk
+diff --git a/mdpreview/src/mdpreview.c b/mdpreview/src/mdpreview.c
+new file mode 100644
+index 0000000..b3ee87a
+--- /dev/null
++++ b/mdpreview/src/mdpreview.c
+@@ -0,0 +1,1585 @@
++/*
++ * mdpreview.c - Markdown preview for Geany, rendered with MuPDF
++ *
++ * Copyright 2026 Matti Palmström <sjukfan@gmail.com>
++ * SPDX-License-Identifier: GPL-2.0-or-later
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * Note: MuPDF is licensed under the GNU AGPL v3. A binary of this plugin
++ * that links MuPDF is therefore distributed under the terms of the AGPL v3.
++ */
++
++#ifdef HAVE_CONFIG_H
++# include "config.h"
++#endif
++
++/* Fallbacks for the standalone build (no config.h) */
++#ifndef GETTEXT_PACKAGE
++# define GETTEXT_PACKAGE "geany-plugins"
++#endif
++#ifndef LOCALEDIR
++# define LOCALEDIR ""
++#endif
++
++#include <geanyplugin.h>
++#include <mupdf/fitz.h>
++#include <string.h>
++#include <math.h>
++
++#if FZ_VERSION_MAJOR == 1 && FZ_VERSION_MINOR < 28
++# error "MuPDF 1.28 or newer is required (it added the Markdown reader)"
++#endif
++#if !FZ_ENABLE_MD
++# error "MuPDF was built without Markdown support (FZ_ENABLE_MD=0)"
++#endif
++
++#define PLUGIN_NAME     "mdpreview"
++#define PREVIEW_LABEL   _("Markdown")
++
++/* Layout units are points (1/72 inch). They are converted to screen pixels
++ * with the desktop's font DPI (Xft.dpi / text scaling factor), the same
++ * setting that scales the rest of Geany's text. 96 dpi = 100 %. HiDPI
++ * integer scaling (GDK_SCALE=2) is handled separately when drawing. */
++#define DEFAULT_DPI     96.0
++/* "Endless" page: lay the document out on one very tall page. */
++#define LAYOUT_HEIGHT   1.0e6f
++#define UPDATE_DELAY_MS 250
++#define MAX_SEL_QUADS   4096
++
++/* Always applied before the user's stylesheet: small margins suit a sidebar. */
++static const char *base_css =
++	"@page{margin:0}"
++	"body{margin:0.8em}"
++	"pre{white-space:pre-wrap}";
++
++static const char *css_template =
++	"/* Markdown Preview stylesheet\n"
++	" *\n"
++	" * This is applied on top of MuPDF's built-in Markdown style.\n"
++	" * Save the file in Geany and the preview updates.\n"
++	" *\n"
++	" * MuPDF understands most of CSS 2.1 (fonts, colours, margins, padding,\n"
++	" * borders, tables, lists, page-break-*), but not flexbox/grid or JS.\n"
++	" * Remove the comment markers around a rule to try it.\n"
++	" */\n"
++	"\n"
++	"/* body { font-family: serif; } */\n"
++	"/* h1, h2 { color: #24292f; } */\n"
++	"/* a:link { color: #0969da; text-decoration: none; } */\n"
++	"/*   (use a:link, not a: headings are wrapped in <a id=...> too) */\n"
++	"/* pre, code { background-color: #f6f8fa; } */\n"
++	"/* pre { white-space: pre; }     (don't wrap code, scroll instead) */\n"
++	"\n"
++	"/* Dark preview: also set the background colour in the plugin preferences.\n"
++	"body { color: #d0d0d0; }\n"
++	"a:link { color: #6cb6ff; }\n"
++	"pre, code { background-color: #2d2d2d; }\n"
++	"blockquote { color: #a0a0a0; }\n"
++	"h1, h2 { border-bottom-color: #555; }\n"
++	"tr:nth-child(even) { background-color: #2a2a2a; }\n"
++	"*/\n";
++
++enum { POS_SIDEBAR = 0, POS_MSGWIN = 1 };
++
++typedef struct
++{
++	GeanyPlugin *plugin;
++	fz_context *ctx;
++
++	GtkWidget *scrolled;
++	GtkWidget *darea;
++
++	/* rendered state */
++	fz_document *doc;
++	fz_page *page;
++	fz_display_list *list;
++	fz_link *links;
++	fz_stext_page *stext;
++	float layout_w;        /* width the document is laid out at (pt) */
++	float content_w;       /* actual ink width (may exceed layout_w) */
++	float content_h;
++	gchar *base_dir;       /* directory of the shown file (locale encoding) */
++
++	/* updating */
++	guint update_source;
++	guint relayout_source;
++	gboolean dirty;        /* update wanted while hidden */
++	gint shown_doc_id;     /* GeanyDocument id, -1 = none */
++	GHashTable *scroll_pos;/* doc id -> saved vertical position */
++	gboolean scroll_pending;
++	gdouble scroll_value;  /* absolute (px) target, or fraction if below */
++	gboolean scroll_is_frac;
++	gchar *pending_anchor; /* "#id" to jump to after next update */
++	guint scroll_clear_source;
++
++	/* selection / mouse */
++	gboolean selecting;
++	gboolean click_is_multi;
++	gdouble press_x, press_y;
++	fz_point sel_a, sel_b;     /* as dragged */
++	fz_point sel_ca, sel_cb;   /* after snapping, used for copying */
++	int sel_mode;
++	fz_quad *quads;
++	int n_quads;
++	fz_link *hover;
++
++	/* configuration */
++	gchar *conf_file;
++	gchar *css_file;
++	gint position;
++	gdouble font_size;
++	GdkRGBA background;
++	gchar *css;            /* base_css + user stylesheet */
++
++	/* preferences dialog widgets */
++	GtkWidget *pref_pos, *pref_size, *pref_bg;
++} MdPreview;
++
++static MdPreview md;
++
++static void schedule_update(guint delay_ms);
++static void load_css(void);
++static void do_layout(void);
++
++
++/* ------------------------------------------------------------------ */
++/* MuPDF helpers                                                       */
++/* ------------------------------------------------------------------ */
++
++static void on_fz_message(void *user, const char *message)
++{
++	g_debug("MuPDF: %s", message);
++}
++
++/* An fz_archive that reads files relative to the Markdown file's folder.
++ * MuPDF's own fz_open_directory() refuses "../" paths, which are common in
++ * Markdown (e.g. ../images/foo.png). MuPDF hands us names like "img/a.png"
++ * or "../shared/b.png"; absolute paths arrive with the leading "/" removed,
++ * so those are tried as a fallback. */
++typedef struct
++{
++	fz_archive super;
++	char *base;
++} local_dir;
++
++static char *local_resolve(fz_context *ctx, fz_archive *arch, const char *name)
++{
++	local_dir *dir = (local_dir *) arch;
++	char *path;
++
++	if (g_path_is_absolute(name))
++		path = g_strdup(name);
++	else
++	{
++		path = g_build_filename(dir->base, name, NULL);
++		if (!g_file_test(path, G_FILE_TEST_EXISTS))
++		{
++			char *abs = g_strconcat(G_DIR_SEPARATOR_S, name, NULL);
++			if (g_file_test(abs, G_FILE_TEST_EXISTS))
++			{
++				g_free(path);
++				path = abs;
++			}
++			else
++				g_free(abs);
++		}
++	}
++	return path;
++}
++
++static int local_has_entry(fz_context *ctx, fz_archive *arch, const char *name)
++{
++	char *path = local_resolve(ctx, arch, name);
++	int ok = g_file_test(path, G_FILE_TEST_IS_REGULAR);
++	g_free(path);
++	return ok;
++}
++
++static fz_buffer *local_read_entry(fz_context *ctx, fz_archive *arch, const char *name)
++{
++	char *path = local_resolve(ctx, arch, name);
++	fz_buffer *buf = NULL;
++	fz_try(ctx)
++		buf = fz_try_read_file(ctx, path);
++	fz_always(ctx)
++		g_free(path);
++	fz_catch(ctx)
++		fz_rethrow(ctx);
++	return buf;
++}
++
++static fz_stream *local_open_entry(fz_context *ctx, fz_archive *arch, const char *name)
++{
++	char *path = local_resolve(ctx, arch, name);
++	fz_stream *stm = NULL;
++	fz_try(ctx)
++		stm = fz_try_open_file(ctx, path);
++	fz_always(ctx)
++		g_free(path);
++	fz_catch(ctx)
++		fz_rethrow(ctx);
++	return stm;
++}
++
++static void local_drop(fz_context *ctx, fz_archive *arch)
++{
++	g_free(((local_dir *) arch)->base);
++}
++
++static fz_archive *new_local_dir(fz_context *ctx, const char *base)
++{
++	local_dir *dir = fz_new_derived_archive(ctx, NULL, local_dir);
++	dir->super.format = "mdpreview-dir";
++	dir->super.has_entry = local_has_entry;
++	dir->super.read_entry = local_read_entry;
++	dir->super.open_entry = local_open_entry;
++	dir->super.drop_archive = local_drop;
++	dir->base = g_strdup(base);
++	return &dir->super;
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Document state                                                      */
++/* ------------------------------------------------------------------ */
++
++static void clear_selection(void)
++{
++	md.n_quads = 0;
++	md.selecting = FALSE;
++}
++
++static void drop_layout(void)
++{
++	clear_selection();
++	md.hover = NULL;
++	fz_drop_stext_page(md.ctx, md.stext);
++	md.stext = NULL;
++	fz_drop_link(md.ctx, md.links);
++	md.links = NULL;
++	fz_drop_display_list(md.ctx, md.list);
++	md.list = NULL;
++	fz_drop_page(md.ctx, md.page);
++	md.page = NULL;
++}
++
++static void drop_document(void)
++{
++	drop_layout();
++	fz_drop_document(md.ctx, md.doc);
++	md.doc = NULL;
++}
++
++static gdouble view_scale(void)
++{
++	GdkScreen *screen = md.darea ? gtk_widget_get_screen(md.darea) : gdk_screen_get_default();
++	gdouble dpi = screen ? gdk_screen_get_resolution(screen) : -1;
++
++	if (dpi <= 0)
++		dpi = DEFAULT_DPI;
++	return dpi / 72.0;
++}
++
++static gint view_width_px(void)
++{
++	GtkWidget *viewport = gtk_bin_get_child(GTK_BIN(md.scrolled));
++	gint w = gtk_widget_get_allocated_width(viewport ? viewport : md.scrolled);
++	return w > 50 ? w : 300;
++}
++
++static GtkAdjustment *vadj(void)
++{
++	return gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(md.scrolled));
++}
++
++/* Lay the current document out at the widget's width and record the result. */
++static void do_layout(void)
++{
++	fz_context *ctx = md.ctx;
++	fz_rect ink = fz_empty_rect;
++	fz_device *bbox = NULL;
++	gdouble s = view_scale();
++
++	drop_layout();
++
++	/* forget the hovered link: it belongs to the old layout */
++	gtk_widget_set_tooltip_text(md.darea, NULL);
++	if (gtk_widget_get_realized(md.darea))
++		gdk_window_set_cursor(gtk_widget_get_window(md.darea), NULL);
++
++	if (!md.doc)
++		return;
++
++	md.layout_w = (float) (view_width_px() / s);
++
++	fz_var(bbox);
++	fz_try(ctx)
++	{
++		fz_layout_document(ctx, md.doc, md.layout_w, LAYOUT_HEIGHT, (float) md.font_size);
++		md.page = fz_load_page(ctx, md.doc, 0);
++		md.list = fz_new_display_list_from_page(ctx, md.page);
++		bbox = fz_new_bbox_device(ctx, &ink);
++		fz_run_display_list(ctx, md.list, bbox, fz_identity, fz_infinite_rect, NULL);
++		fz_close_device(ctx, bbox);
++		md.links = fz_load_links(ctx, md.page);
++	}
++	fz_always(ctx)
++		fz_drop_device(ctx, bbox);
++	fz_catch(ctx)
++	{
++		g_warning("Markdown preview: layout failed: %s", fz_caught_message(ctx));
++		drop_layout();
++	}
++
++	if (fz_is_empty_rect(ink))
++		ink = fz_make_rect(0, 0, 0, 0);
++	md.content_w = MAX(md.layout_w, ink.x1);
++	md.content_h = ink.y1 + (float) md.font_size;
++
++	/* Only request a width when something sticks out (wide table, long
++	 * word); then a horizontal scrollbar appears instead of clipping. */
++	gtk_widget_set_size_request(md.darea,
++		md.content_w > md.layout_w + 1 ? (gint) ceil(md.content_w * s) : -1,
++		(gint) ceil(md.content_h * s));
++	gtk_widget_queue_draw(md.darea);
++}
++
++/* Parse a buffer with MuPDF. magic is "text/markdown" or "text/html". */
++static gboolean load_buffer(const char *data, size_t len, const char *magic, const gchar *dir)
++{
++	fz_context *ctx = md.ctx;
++	fz_buffer *buf = NULL;
++	fz_archive *arc = NULL;
++	fz_stream *stm = NULL;
++	gboolean ok = TRUE;
++
++	drop_document();
++
++	fz_var(buf);
++	fz_var(arc);
++	fz_var(stm);
++	fz_try(ctx)
++	{
++		buf = fz_new_buffer(ctx, len + 1);
++		fz_append_data(ctx, buf, data, len);
++		/* MuPDF's Markdown reader (md.c) drops the last byte of its input,
++		 * so make sure that byte is a harmless newline. */
++		fz_append_byte(ctx, buf, '\n');
++		if (dir)
++			arc = new_local_dir(ctx, dir);
++		stm = fz_open_buffer(ctx, buf);
++		md.doc = fz_open_document_with_stream_and_dir(ctx, magic, stm, arc);
++		fz_style_document(ctx, md.doc, 1, md.css);
++	}
++	fz_always(ctx)
++	{
++		fz_drop_stream(ctx, stm);
++		fz_drop_archive(ctx, arc);
++		fz_drop_buffer(ctx, buf);
++	}
++	fz_catch(ctx)
++	{
++		g_warning("Markdown preview: cannot open document: %s", fz_caught_message(ctx));
++		drop_document();
++		ok = FALSE;
++	}
++	return ok;
++}
++
++static void show_message(const gchar *msg)
++{
++	gchar *esc = g_markup_escape_text(msg, -1);
++	gchar *html = g_strdup_printf(
++		"<html><body><p style=\"font-family:sans-serif;color:gray;text-align:center;margin-top:2em\">%s</p></body></html>",
++		esc);
++	load_buffer(html, strlen(html), "text/html", NULL);
++	g_free(html);
++	g_free(esc);
++}
++
++static gboolean is_markdown_doc(GeanyDocument *doc)
++{
++	return DOC_VALID(doc) && doc->file_type &&
++		doc->file_type->id == GEANY_FILETYPES_MARKDOWN;
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Scrolling                                                           */
++/* ------------------------------------------------------------------ */
++
++static gboolean on_scroll_clear(gpointer data)
++{
++	md.scroll_pending = FALSE;
++	md.scroll_clear_source = 0;
++	return G_SOURCE_REMOVE;
++}
++
++/* The adjustment only learns the new height after GTK has re-allocated
++ * the widget, so the wanted position is kept "pending" and applied again
++ * whenever the adjustment changes (for a short while). */
++static void apply_pending_scroll(void)
++{
++	GtkAdjustment *adj = vadj();
++	gdouble upper, target;
++
++	if (!md.scroll_pending)
++		return;
++	upper = gtk_adjustment_get_upper(adj);
++	target = md.scroll_is_frac ? md.scroll_value * upper : md.scroll_value;
++	gtk_adjustment_set_value(adj, target);
++}
++
++static void request_scroll(gdouble value, gboolean is_frac)
++{
++	md.scroll_pending = TRUE;
++	md.scroll_value = value;
++	md.scroll_is_frac = is_frac;
++	apply_pending_scroll();
++	if (md.scroll_clear_source)
++		g_source_remove(md.scroll_clear_source);
++	md.scroll_clear_source = g_timeout_add(500, on_scroll_clear, NULL);
++}
++
++static void on_vadj_changed(GtkAdjustment *adj, gpointer data)
++{
++	apply_pending_scroll();
++}
++
++static gboolean scroll_to_anchor(const gchar *anchor)
++{
++	float x = 0, y = 0;
++	fz_location loc;
++
++	if (!md.doc || !anchor || !*anchor)
++		return FALSE;
++
++	fz_var(loc);
++	fz_try(md.ctx)
++		loc = fz_resolve_link(md.ctx, md.doc, anchor, &x, &y);
++	fz_catch(md.ctx)
++		loc.page = -1;
++
++	if (loc.page != 0)
++		return FALSE;
++	request_scroll(MAX(0, y * view_scale() - 4), FALSE);
++	return TRUE;
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Updating from Geany                                                 */
++/* ------------------------------------------------------------------ */
++
++static void update_now(void)
++{
++	GeanyDocument *doc = document_get_current();
++	gint new_id = DOC_VALID(doc) ? (gint) doc->id : -1;
++	gboolean switched = (new_id != md.shown_doc_id);
++
++	if (!gtk_widget_get_mapped(md.darea))
++	{
++		/* Hidden (other sidebar tab is shown): do the work when mapped. */
++		md.dirty = TRUE;
++		return;
++	}
++	md.dirty = FALSE;
++
++	if (switched && md.shown_doc_id >= 0)
++	{
++		gdouble *pos = g_new(gdouble, 1);
++		*pos = gtk_adjustment_get_value(vadj());
++		g_hash_table_insert(md.scroll_pos, GINT_TO_POINTER(md.shown_doc_id), pos);
++	}
++
++	g_free(md.base_dir);
++	md.base_dir = NULL;
++
++	if (is_markdown_doc(doc))
++	{
++		ScintillaObject *sci = doc->editor->sci;
++		const char *text = (const char *) scintilla_send_message(sci, SCI_GETCHARACTERPOINTER, 0, 0);
++		size_t len = (size_t) sci_get_length(sci);
++
++		if (doc->real_path)
++			md.base_dir = g_path_get_dirname(doc->real_path);
++		else if (doc->file_name)
++		{
++			gchar *locale = utils_get_locale_from_utf8(doc->file_name);
++			md.base_dir = g_path_get_dirname(locale);
++			g_free(locale);
++		}
++		else
++			md.base_dir = g_get_current_dir();
++
++		if (!load_buffer(text, len, "text/markdown", md.base_dir))
++			show_message(_("This Markdown document could not be rendered."));
++	}
++	else
++		show_message(_("The current document is not a Markdown file."));
++
++	do_layout();
++	md.shown_doc_id = new_id;
++
++	if (md.pending_anchor)
++	{
++		scroll_to_anchor(md.pending_anchor);
++		g_free(md.pending_anchor);
++		md.pending_anchor = NULL;
++	}
++	else if (switched)
++	{
++		gdouble *saved = g_hash_table_lookup(md.scroll_pos, GINT_TO_POINTER(new_id));
++		request_scroll(saved ? *saved : 0, FALSE);
++	}
++}
++
++static gboolean on_update_timeout(gpointer data)
++{
++	md.update_source = 0;
++	update_now();
++	return G_SOURCE_REMOVE;
++}
++
++static void schedule_update(guint delay_ms)
++{
++	if (md.update_source)
++		g_source_remove(md.update_source);
++	if (delay_ms == 0)
++		md.update_source = g_idle_add(on_update_timeout, NULL);
++	else
++		md.update_source = g_timeout_add(delay_ms, on_update_timeout, NULL);
++}
++
++static gboolean on_editor_notify(GObject *obj, GeanyEditor *editor,
++	SCNotification *nt, gpointer data)
++{
++	if (nt->nmhdr.code == SCN_MODIFIED && nt->length > 0 &&
++		(nt->modificationType & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)) &&
++		editor->document == document_get_current())
++	{
++		schedule_update(UPDATE_DELAY_MS);
++	}
++	return FALSE;
++}
++
++static void on_document_signal(GObject *obj, GeanyDocument *doc, gpointer data)
++{
++	schedule_update(0);
++}
++
++static void on_document_filetype_set(GObject *obj, GeanyDocument *doc,
++	GeanyFiletype *old, gpointer data)
++{
++	schedule_update(0);
++}
++
++static void on_document_close(GObject *obj, GeanyDocument *doc, gpointer data)
++{
++	g_hash_table_remove(md.scroll_pos, GINT_TO_POINTER((gint) doc->id));
++	if ((gint) doc->id == md.shown_doc_id)
++		md.shown_doc_id = -1;
++}
++
++static void on_darea_map(GtkWidget *w, gpointer data)
++{
++	if (md.dirty)
++		schedule_update(0);
++}
++
++/* Re-flow when the width changes. */
++static gboolean on_relayout_idle(gpointer data)
++{
++	GtkAdjustment *adj = vadj();
++	gdouble upper = gtk_adjustment_get_upper(adj);
++	gdouble frac = upper > 0 ? gtk_adjustment_get_value(adj) / upper : 0;
++
++	md.relayout_source = 0;
++	if (!md.doc)
++		return G_SOURCE_REMOVE;
++	do_layout();
++	request_scroll(frac, TRUE);
++	return G_SOURCE_REMOVE;
++}
++
++/* Font DPI / text scaling changed in the desktop settings */
++static void on_resolution_changed(GObject *obj, GParamSpec *pspec, gpointer data)
++{
++	if (md.doc && !md.relayout_source)
++		md.relayout_source = g_idle_add(on_relayout_idle, NULL);
++}
++
++/* Moved to a monitor with another integer scale (GDK_SCALE) */
++static void on_scale_factor_changed(GObject *obj, GParamSpec *pspec, gpointer data)
++{
++	gtk_widget_queue_draw(md.darea);
++}
++
++static void on_viewport_size_allocate(GtkWidget *w, GdkRectangle *alloc, gpointer data)
++{
++	float new_w = (float) (alloc->width / view_scale());
++
++	if (md.doc && alloc->width > 50 && fabsf(new_w - md.layout_w) >= 0.5f && !md.relayout_source)
++		md.relayout_source = g_idle_add(on_relayout_idle, NULL);
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Drawing                                                             */
++/* ------------------------------------------------------------------ */
++
++static gboolean on_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
++{
++	fz_context *ctx = md.ctx;
++	GdkRectangle clip;
++	fz_pixmap *pix = NULL;
++	fz_device *dev = NULL;
++	gint sf;
++	gdouble s;
++	fz_irect ib;
++
++	gdk_cairo_set_source_rgba(cr, &md.background);
++	cairo_paint(cr);
++
++	if (!md.list || !gdk_cairo_get_clip_rectangle(cr, &clip))
++		return TRUE;
++
++	sf = gtk_widget_get_scale_factor(widget);
++	s = view_scale();
++	ib.x0 = clip.x * sf;
++	ib.y0 = clip.y * sf;
++	ib.x1 = (clip.x + clip.width) * sf;
++	ib.y1 = (clip.y + clip.height) * sf;
++
++	fz_var(pix);
++	fz_var(dev);
++	fz_try(ctx)
++	{
++		cairo_surface_t *surf;
++
++		/* BGRA with alpha == cairo's ARGB32 on little-endian machines */
++		pix = fz_new_pixmap_with_bbox(ctx, fz_device_bgr(ctx), ib, NULL, 1);
++		fz_clear_pixmap(ctx, pix);
++		dev = fz_new_draw_device(ctx, fz_identity, pix);
++		fz_run_display_list(ctx, md.list, dev, fz_scale((float) (s * sf), (float) (s * sf)),
++			fz_rect_from_irect(ib), NULL);
++		fz_close_device(ctx, dev);
++
++		surf = cairo_image_surface_create_for_data(fz_pixmap_samples(ctx, pix),
++			CAIRO_FORMAT_ARGB32, fz_pixmap_width(ctx, pix), fz_pixmap_height(ctx, pix),
++			(int) fz_pixmap_stride(ctx, pix));
++		cairo_surface_set_device_scale(surf, sf, sf);
++		cairo_set_source_surface(cr, surf, clip.x, clip.y);
++		cairo_paint(cr);
++		cairo_surface_destroy(surf);
++	}
++	fz_always(ctx)
++	{
++		fz_drop_device(ctx, dev);
++		fz_drop_pixmap(ctx, pix);
++	}
++	fz_catch(ctx)
++		g_warning("Markdown preview: drawing failed: %s", fz_caught_message(ctx));
++
++	/* selection highlight */
++	if (md.n_quads > 0)
++	{
++		GtkStyleContext *sc = gtk_widget_get_style_context(widget);
++		GdkRGBA sel = { 0.2, 0.5, 1.0, 0.35 };
++		GdkRGBA themed;
++		int i;
++
++		if (gtk_style_context_lookup_color(sc, "theme_selected_bg_color", &themed))
++		{
++			sel = themed;
++			sel.alpha = 0.4;
++		}
++		gdk_cairo_set_source_rgba(cr, &sel);
++		for (i = 0; i < md.n_quads; i++)
++		{
++			fz_quad q = md.quads[i];
++			cairo_move_to(cr, q.ul.x * s, q.ul.y * s);
++			cairo_line_to(cr, q.ur.x * s, q.ur.y * s);
++			cairo_line_to(cr, q.lr.x * s, q.lr.y * s);
++			cairo_line_to(cr, q.ll.x * s, q.ll.y * s);
++			cairo_close_path(cr);
++		}
++		cairo_fill(cr);
++	}
++	return TRUE;
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Selection                                                           */
++/* ------------------------------------------------------------------ */
++
++static gboolean ensure_stext(void)
++{
++	if (md.stext)
++		return TRUE;
++	if (!md.list)
++		return FALSE;
++	fz_try(md.ctx)
++		md.stext = fz_new_stext_page_from_display_list(md.ctx, md.list, NULL);
++	fz_catch(md.ctx)
++		md.stext = NULL;
++	return md.stext != NULL;
++}
++
++static void update_selection(void)
++{
++	if (!ensure_stext())
++		return;
++	md.sel_ca = md.sel_a;
++	md.sel_cb = md.sel_b;
++	fz_try(md.ctx)
++	{
++		if (md.sel_mode != FZ_SELECT_CHARS)
++			fz_snap_selection(md.ctx, md.stext, &md.sel_ca, &md.sel_cb, md.sel_mode);
++		md.n_quads = fz_highlight_selection(md.ctx, md.stext, md.sel_ca, md.sel_cb,
++			md.quads, MAX_SEL_QUADS);
++	}
++	fz_catch(md.ctx)
++		md.n_quads = 0;
++	gtk_widget_queue_draw(md.darea);
++}
++
++/* Copying text.
++ *
++ * fz_copy_selection() ends every visual line with a newline, so text that was
++ * merely wrapped by the layout would be copied with hard line breaks. Work
++ * out which line ends are soft wraps, mark the last character of those lines
++ * while MuPDF copies, and then turn "marked character + newline" back into
++ * the character followed by a space (or nothing, after a hyphen or slash,
++ * where the layout breaks inside a word, or between CJK characters).
++ *
++ * A line end counts as a soft wrap when the next line is in the same text
++ * block, directly below, does not start with a list marker, and its first
++ * word would not have fitted on the line before it (i.e. the layout really
++ * had to wrap there). For ordinary text "fits" is measured against the
++ * widest line of the block. For code blocks (pre-wrap, monospace) that does
++ * not work, since a short block's longest line is often a hard break, so
++ * there the real right edge is used: the layout width minus the left indent
++ * of the code. Anything unclear keeps the newline, so the worst case is the
++ * old behaviour. */
++#define WRAP_MARK_BASE  0xF0000   /* Unicode plane-15 private use area */
++#define WRAP_MARK_MAX   0x8000
++
++typedef struct { fz_stext_char *ch; int c; } wrap_mark;
++
++static gboolean is_mono(fz_stext_char *ch)
++{
++	return ch && ch->font && fz_font_is_monospaced(md.ctx, ch->font);
++}
++
++static gboolean is_list_marker(fz_stext_char *ch)
++{
++	int c = ch->c;
++	if (c == 0x2022 || c == 0x25E6 || c == 0x25AA || c == 0x2023 || c == 0x2219)
++		return TRUE;
++	if (c >= '0' && c <= '9')
++	{
++		while (ch && ch->c >= '0' && ch->c <= '9')
++			ch = ch->next;
++		return ch && (ch->c == '.' || ch->c == ')') && ch->next && ch->next->c == ' ';
++	}
++	return FALSE;
++}
++
++/* right: right edge for ordinary text; mono_right: for code, or 0 if unknown */
++static gboolean is_soft_wrap(fz_stext_line *a, fz_stext_line *b, float right, float mono_right)
++{
++	fz_stext_char *last = a->last_char, *first = b->first_char, *w, *wend;
++	float size, gap, width, limit;
++
++	if (!last || !first || a->wmode || b->wmode ||
++	    fabsf(a->dir.y) > 0.01f || fabsf(b->dir.y) > 0.01f)
++		return FALSE;
++	size = last->size;
++	/* the next line must be below, not beside (table cells) */
++	if (first->origin.y < last->origin.y + 0.5f * size)
++		return FALSE;
++	/* hanging indent is fine, but never a step back to the left */
++	if (b->bbox.x0 < a->bbox.x0 - 0.5f * size)
++		return FALSE;
++	if (is_list_marker(first))
++		return FALSE;
++
++	limit = right;
++	gap = 0.25f * size;
++	if (is_mono(last) && is_mono(first))
++	{
++		if (mono_right <= 0)
++			return FALSE;
++		limit = mono_right;
++		gap = fabsf(last->quad.ur.x - last->quad.ul.x);   /* one character cell */
++	}
++	/* a wrap right after a hyphen or slash had no space in between */
++	if (last->c == '-' || last->c == '/')
++		gap = 0;
++	/* the first chunk of the next line: up to a space, or just after a
++	 * hyphen or slash, which MuPDF also breaks at */
++	for (w = first, wend = first; w; w = w->next)
++	{
++		if (w->c == ' ')
++			break;
++		wend = w;
++		if (w->c == '-' || w->c == '/')
++			break;
++	}
++	width = fmaxf(wend->quad.ur.x, wend->quad.lr.x) - fminf(first->quad.ul.x, first->quad.ll.x);
++	return a->bbox.x1 + gap + width > limit - 1.0f;
++}
++
++static gchar *selection_text(void)
++{
++	char *text = NULL;
++	gchar *ret = NULL;
++	GArray *marks;
++	fz_stext_block *block;
++	fz_stext_line *line;
++	float mono_x0 = 0, mono_right = 0;
++	guint i;
++
++	if (md.n_quads == 0 || !ensure_stext())
++		return NULL;
++
++	/* left indent of code blocks: the smallest x0 of a purely monospace line */
++	for (block = md.stext->first_block; block; block = block->next)
++	{
++		if (block->type != FZ_STEXT_BLOCK_TEXT)
++			continue;
++		for (line = block->u.t.first_line; line; line = line->next)
++			if (is_mono(line->first_char) && is_mono(line->last_char) &&
++			    (mono_x0 == 0 || line->bbox.x0 < mono_x0))
++				mono_x0 = line->bbox.x0;
++	}
++	if (mono_x0 > 0)
++		mono_right = md.layout_w - mono_x0;
++
++	marks = g_array_new(FALSE, FALSE, sizeof(wrap_mark));
++	for (block = md.stext->first_block; block; block = block->next)
++	{
++		float right = 0;
++		if (block->type != FZ_STEXT_BLOCK_TEXT)
++			continue;
++		for (line = block->u.t.first_line; line; line = line->next)
++			right = fmaxf(right, line->bbox.x1);
++		for (line = block->u.t.first_line; line && line->next; line = line->next)
++		{
++			wrap_mark m;
++			m.ch = line->last_char;
++			if (m.ch && m.ch->c > 32 && m.ch->c < WRAP_MARK_MAX - 16 &&
++			    is_soft_wrap(line, line->next, right, mono_right))
++			{
++				m.c = m.ch->c;
++				m.ch->c = WRAP_MARK_BASE + m.c;
++				g_array_append_val(marks, m);
++			}
++		}
++	}
++
++	fz_try(md.ctx)
++		text = fz_copy_selection(md.ctx, md.stext, md.sel_ca, md.sel_cb, 0);
++	fz_catch(md.ctx)
++		text = NULL;
++
++	for (i = 0; i < marks->len; i++)
++	{
++		wrap_mark *m = &g_array_index(marks, wrap_mark, i);
++		m->ch->c = m->c;
++	}
++	g_array_free(marks, TRUE);
++
++	if (text && *text)
++	{
++		GString *out = g_string_sized_new(strlen(text));
++		const gchar *p = text;
++
++		while (*p)
++		{
++			gunichar u = g_utf8_get_char(p);
++			p = g_utf8_next_char(p);
++			if (u >= WRAP_MARK_BASE && u < WRAP_MARK_BASE + WRAP_MARK_MAX)
++			{
++				u -= WRAP_MARK_BASE;
++				g_string_append_unichar(out, u);
++				if (*p == '\n')
++				{
++					p++;
++					/* no space after a hyphen or slash, or between CJK characters */
++					if (u != '-' && u != '/' && u != 0x2010 && u != 0x2011 && u != 0x2013 &&
++					    !(u >= 0x2E80 && u <= 0xD7AF) && !(u >= 0xF900 && u <= 0xFAFF) &&
++					    !(u >= 0xFF00 && u <= 0xFFEF))
++						g_string_append_c(out, ' ');
++				}
++			}
++			else
++				g_string_append_unichar(out, u);
++		}
++		ret = g_string_free(out, FALSE);
++	}
++	fz_free(md.ctx, text);
++	return ret;
++}
++
++static void copy_selection(GdkAtom which)
++{
++	gchar *text = selection_text();
++	if (text)
++	{
++		gtk_clipboard_set_text(gtk_clipboard_get(which), text, -1);
++		g_free(text);
++	}
++}
++
++static void select_all(void)
++{
++	md.sel_mode = FZ_SELECT_CHARS;
++	md.sel_a = fz_make_point(0, 0);
++	md.sel_b = fz_make_point(md.content_w, md.content_h);
++	update_selection();
++	copy_selection(GDK_SELECTION_PRIMARY);
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Links                                                               */
++/* ------------------------------------------------------------------ */
++
++static fz_point widget_to_doc(gdouble x, gdouble y)
++{
++	gdouble s = view_scale();
++	return fz_make_point((float) (x / s), (float) (y / s));
++}
++
++static fz_link *link_at(gdouble x, gdouble y)
++{
++	fz_point p = widget_to_doc(x, y);
++	fz_link *l;
++
++	for (l = md.links; l; l = l->next)
++		if (fz_is_point_inside_rect(p, l->rect))
++			return l;
++	return NULL;
++}
++
++static gboolean is_markdown_name(const gchar *path)
++{
++	static const gchar *exts[] = { ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".mdwn", ".mdtxt", NULL };
++	gchar *lower = g_ascii_strdown(path, -1);
++	gboolean ret = FALSE;
++	int i;
++
++	for (i = 0; exts[i] && !ret; i++)
++		ret = g_str_has_suffix(lower, exts[i]);
++	g_free(lower);
++	return ret;
++}
++
++static void open_local_file(const gchar *path, const gchar *anchor)
++{
++	if (!g_file_test(path, G_FILE_TEST_EXISTS))
++	{
++		gchar *utf8 = utils_get_utf8_from_locale(path);
++		ui_set_statusbar(TRUE, _("Markdown preview: file not found: %s"), utf8);
++		g_free(utf8);
++		return;
++	}
++
++	if (is_markdown_name(path))
++	{
++		GeanyDocument *cur = document_get_current();
++		GeanyDocument *doc;
++
++		g_free(md.pending_anchor);
++		md.pending_anchor = (anchor && anchor[1]) ? g_strdup(anchor) : NULL;
++
++		doc = document_open_file(path, FALSE, NULL, NULL);
++		if (doc && doc == cur)
++		{
++			/* Link to the file that is already shown */
++			if (md.pending_anchor)
++				scroll_to_anchor(md.pending_anchor);
++			g_free(md.pending_anchor);
++			md.pending_anchor = NULL;
++		}
++		else if (doc && !is_markdown_doc(doc))
++		{
++			g_free(md.pending_anchor);
++			md.pending_anchor = NULL;
++		}
++	}
++	else
++	{
++		/* Images, PDFs, folders, ...: hand over to the desktop. */
++		gchar *uri = g_filename_to_uri(path, NULL, NULL);
++		if (uri && !g_app_info_launch_default_for_uri(uri, NULL, NULL))
++			utils_open_browser(uri);
++		g_free(uri);
++	}
++}
++
++static void activate_link(const char *uri)
++{
++	if (uri[0] == '#')
++	{
++		scroll_to_anchor(uri);
++		return;
++	}
++
++	if (g_str_has_prefix(uri, "file:"))
++	{
++		gchar *hash = strchr(uri, '#');
++		gchar *u = hash ? g_strndup(uri, hash - uri) : g_strdup(uri);
++		gchar *path = g_filename_from_uri(u, NULL, NULL);
++		if (path)
++			open_local_file(path, hash);
++		g_free(path);
++		g_free(u);
++		return;
++	}
++
++	if (fz_is_external_link(md.ctx, uri))
++	{
++		utils_open_browser(uri);
++		return;
++	}
++
++	/* Relative link like "other.md", "../docs/x.md#usage" */
++	{
++		const gchar *hash = strchr(uri, '#');
++		gchar *rel = hash ? g_strndup(uri, hash - uri) : g_strdup(uri);
++		gchar *path = NULL;
++
++		if (g_path_is_absolute(rel))
++			path = g_strdup(rel);
++		else
++		{
++			path = g_build_filename(md.base_dir ? md.base_dir : ".", rel, NULL);
++			if (!g_file_test(path, G_FILE_TEST_EXISTS))
++			{
++				/* MuPDF strips the leading "/" from absolute links */
++				gchar *abs = g_strconcat(G_DIR_SEPARATOR_S, rel, NULL);
++				if (g_file_test(abs, G_FILE_TEST_EXISTS))
++				{
++					g_free(path);
++					path = abs;
++				}
++				else
++					g_free(abs);
++			}
++		}
++		open_local_file(path, hash);
++		g_free(path);
++		g_free(rel);
++	}
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Mouse and keyboard                                                  */
++/* ------------------------------------------------------------------ */
++
++static void on_menu_copy(GtkMenuItem *item, gpointer data)
++{
++	copy_selection(GDK_SELECTION_CLIPBOARD);
++}
++
++static void on_menu_select_all(GtkMenuItem *item, gpointer data)
++{
++	select_all();
++}
++
++static void on_menu_copy_link(GtkMenuItem *item, gpointer uri)
++{
++	gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), uri, -1);
++}
++
++/* Re-render from the editor text. Also re-reads the stylesheet, and since
++ * the document is opened again, images changed on disk are picked up. */
++static void on_menu_reload(GtkMenuItem *item, gpointer data)
++{
++	load_css();
++	schedule_update(0);
++}
++
++/* GTK emits "deactivate" BEFORE the clicked item's "activate". Destroying
++ * the menu right away would delete the item before its action ran, so the
++ * menu is destroyed from an idle callback instead. */
++static gboolean destroy_menu_idle(gpointer menu)
++{
++	gtk_widget_destroy(GTK_WIDGET(menu));
++	g_object_unref(menu);
++	return G_SOURCE_REMOVE;
++}
++
++static void on_menu_deactivate(GtkMenuShell *menu, gpointer data)
++{
++	g_idle_add(destroy_menu_idle, g_object_ref(menu));
++}
++
++static void show_context_menu(GdkEventButton *ev)
++{
++	GtkWidget *menu = gtk_menu_new();
++	GtkWidget *item;
++	fz_link *link = link_at(ev->x, ev->y);
++
++	item = gtk_menu_item_new_with_mnemonic(_("_Copy"));
++	gtk_widget_set_sensitive(item, md.n_quads > 0);
++	g_signal_connect(item, "activate", G_CALLBACK(on_menu_copy), NULL);
++	gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
++
++	item = gtk_menu_item_new_with_mnemonic(_("Select _All"));
++	g_signal_connect(item, "activate", G_CALLBACK(on_menu_select_all), NULL);
++	gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
++
++	if (link)
++	{
++		item = gtk_menu_item_new_with_mnemonic(_("Copy _Link Address"));
++		g_signal_connect_data(item, "activate", G_CALLBACK(on_menu_copy_link),
++			g_strdup(link->uri), (GClosureNotify) g_free, 0);
++		gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
++	}
++
++	gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
++	item = gtk_menu_item_new_with_mnemonic(_("_Reload Preview"));
++	g_signal_connect(item, "activate", G_CALLBACK(on_menu_reload), NULL);
++	gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
++
++	gtk_widget_show_all(menu);
++	g_signal_connect(menu, "deactivate", G_CALLBACK(on_menu_deactivate), NULL);
++	gtk_menu_popup_at_pointer(GTK_MENU(menu), (GdkEvent *) ev);
++}
++
++static gboolean on_button_press(GtkWidget *w, GdkEventButton *ev, gpointer data)
++{
++	gtk_widget_grab_focus(w);
++
++	if (ev->button == 3 && ev->type == GDK_BUTTON_PRESS)
++	{
++		show_context_menu(ev);
++		return TRUE;
++	}
++	if (ev->button != 1)
++		return FALSE;
++
++	md.sel_a = md.sel_b = widget_to_doc(ev->x, ev->y);
++	if (ev->type == GDK_2BUTTON_PRESS || ev->type == GDK_3BUTTON_PRESS)
++	{
++		md.click_is_multi = TRUE;
++		md.selecting = FALSE;
++		md.sel_mode = ev->type == GDK_2BUTTON_PRESS ? FZ_SELECT_WORDS : FZ_SELECT_LINES;
++		update_selection();
++		copy_selection(GDK_SELECTION_PRIMARY);
++		return TRUE;
++	}
++
++	md.click_is_multi = FALSE;
++	md.selecting = TRUE;
++	md.sel_mode = FZ_SELECT_CHARS;
++	md.press_x = ev->x;
++	md.press_y = ev->y;
++	if (md.n_quads)
++	{
++		md.n_quads = 0;
++		gtk_widget_queue_draw(w);
++	}
++	return TRUE;
++}
++
++static gboolean on_motion(GtkWidget *w, GdkEventMotion *ev, gpointer data)
++{
++	if (md.selecting && (ev->state & GDK_BUTTON1_MASK))
++	{
++		md.sel_b = widget_to_doc(ev->x, ev->y);
++		update_selection();
++	}
++	else
++	{
++		fz_link *link = link_at(ev->x, ev->y);
++		if (link != md.hover)
++		{
++			GdkWindow *win = gtk_widget_get_window(w);
++			GdkCursor *cur = link ? gdk_cursor_new_from_name(gdk_window_get_display(win), "pointer") : NULL;
++			gdk_window_set_cursor(win, cur);
++			if (cur)
++				g_object_unref(cur);
++			gtk_widget_set_tooltip_text(w, link ? link->uri : NULL);
++			md.hover = link;
++		}
++	}
++	gdk_event_request_motions(ev);
++	return TRUE;
++}
++
++static gboolean on_button_release(GtkWidget *w, GdkEventButton *ev, gpointer data)
++{
++	gboolean was_selecting = md.selecting;
++
++	if (ev->button != 1)
++		return FALSE;
++	md.selecting = FALSE;
++
++	if (md.click_is_multi || !was_selecting)
++		return TRUE;
++
++	if (fabs(ev->x - md.press_x) < 4 && fabs(ev->y - md.press_y) < 4)
++	{
++		/* a click, not a drag */
++		fz_link *link = link_at(ev->x, ev->y);
++		md.n_quads = 0;
++		gtk_widget_queue_draw(w);
++		if (link)
++		{
++			gchar *uri = g_strdup(link->uri); /* activating may reload */
++			activate_link(uri);
++			g_free(uri);
++		}
++	}
++	else
++		copy_selection(GDK_SELECTION_PRIMARY);
++	return TRUE;
++}
++
++/* Geany's own keybindings see Ctrl+C before any widget does, so catch it
++ * through the plugin "key-press" signal while the preview has focus. */
++static gboolean on_key_press(GObject *obj, GdkEventKey *ev, gpointer data)
++{
++	guint mods = ev->state & gtk_accelerator_get_default_mod_mask();
++
++	if (!gtk_widget_has_focus(md.darea) || mods != GDK_CONTROL_MASK)
++		return FALSE;
++
++	switch (gdk_keyval_to_lower(ev->keyval))
++	{
++		case GDK_KEY_c:
++		case GDK_KEY_Insert:
++			copy_selection(GDK_SELECTION_CLIPBOARD);
++			return TRUE;
++		case GDK_KEY_a:
++			select_all();
++			return TRUE;
++	}
++	return FALSE;
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Configuration                                                       */
++/* ------------------------------------------------------------------ */
++
++static void load_css(void)
++{
++	gchar *user = NULL;
++
++	g_free(md.css);
++	if (g_file_get_contents(md.css_file, &user, NULL, NULL))
++		md.css = g_strconcat(base_css, "\n", user, NULL);
++	else
++		md.css = g_strdup(base_css);
++	g_free(user);
++}
++
++static void load_config(void)
++{
++	GKeyFile *kf = g_key_file_new();
++	gchar *bg;
++
++	md.position = POS_SIDEBAR;
++	md.font_size = 11.0;
++	gdk_rgba_parse(&md.background, "#ffffff");
++
++	if (g_key_file_load_from_file(kf, md.conf_file, G_KEY_FILE_NONE, NULL))
++	{
++		md.position = utils_get_setting_integer(kf, PLUGIN_NAME, "position", POS_SIDEBAR);
++		md.font_size = g_key_file_get_double(kf, PLUGIN_NAME, "font_size", NULL);
++		if (md.font_size < 4 || md.font_size > 72)
++			md.font_size = 11.0;
++		bg = utils_get_setting_string(kf, PLUGIN_NAME, "background", "#ffffff");
++		if (!gdk_rgba_parse(&md.background, bg))
++			gdk_rgba_parse(&md.background, "#ffffff");
++		g_free(bg);
++	}
++	g_key_file_free(kf);
++	load_css();
++}
++
++static void save_config(void)
++{
++	GKeyFile *kf = g_key_file_new();
++	gchar *dir = g_path_get_dirname(md.conf_file);
++	gchar *bg = gdk_rgba_to_string(&md.background);
++	gchar *data;
++
++	g_key_file_load_from_file(kf, md.conf_file, G_KEY_FILE_KEEP_COMMENTS, NULL);
++	g_key_file_set_integer(kf, PLUGIN_NAME, "position", md.position);
++	g_key_file_set_double(kf, PLUGIN_NAME, "font_size", md.font_size);
++	g_key_file_set_string(kf, PLUGIN_NAME, "background", bg);
++
++	if (utils_mkdir(dir, TRUE) == 0)
++	{
++		data = g_key_file_to_data(kf, NULL, NULL);
++		utils_write_file(md.conf_file, data);
++		g_free(data);
++	}
++	g_free(bg);
++	g_free(dir);
++	g_key_file_free(kf);
++}
++
++static GtkNotebook *target_notebook(void)
++{
++	GeanyMainWidgets *mw = md.plugin->geany_data->main_widgets;
++	return GTK_NOTEBOOK(md.position == POS_MSGWIN ? mw->message_window_notebook : mw->sidebar_notebook);
++}
++
++static void place_tab(gboolean show)
++{
++	GtkNotebook *nb = target_notebook();
++	GtkWidget *parent = gtk_widget_get_parent(md.scrolled);
++	gint page;
++
++	if (parent == GTK_WIDGET(nb))
++		return;
++
++	g_object_ref(md.scrolled);
++	if (parent)
++		gtk_container_remove(GTK_CONTAINER(parent), md.scrolled);
++	page = gtk_notebook_append_page(nb, md.scrolled, gtk_label_new(PREVIEW_LABEL));
++	gtk_notebook_set_tab_reorderable(nb, md.scrolled, TRUE);
++	g_object_unref(md.scrolled);
++	gtk_widget_show_all(md.scrolled);
++	if (show)
++		gtk_notebook_set_current_page(nb, page);
++}
++
++/* Re-read the stylesheet when it is saved from Geany. */
++static void on_document_save(GObject *obj, GeanyDocument *doc, gpointer data)
++{
++	if (doc->real_path)
++	{
++		gchar *css_real = utils_get_real_path(md.css_file);
++		if (css_real && strcmp(css_real, doc->real_path) == 0)
++		{
++			load_css();
++			schedule_update(0);
++		}
++		g_free(css_real);
++	}
++}
++
++static void on_edit_css_clicked(GtkButton *button, gpointer data)
++{
++	if (!g_file_test(md.css_file, G_FILE_TEST_EXISTS))
++	{
++		gchar *dir = g_path_get_dirname(md.css_file);
++		utils_mkdir(dir, TRUE);
++		utils_write_file(md.css_file, css_template);
++		g_free(dir);
++	}
++	document_open_file(md.css_file, FALSE, NULL, NULL);
++	gtk_dialog_response(GTK_DIALOG(gtk_widget_get_toplevel(GTK_WIDGET(button))), GTK_RESPONSE_CANCEL);
++}
++
++static void on_configure_response(GtkDialog *dialog, gint response, gpointer data)
++{
++	if (response != GTK_RESPONSE_OK && response != GTK_RESPONSE_APPLY)
++		return;
++
++	md.position = gtk_combo_box_get_active(GTK_COMBO_BOX(md.pref_pos));
++	md.font_size = gtk_spin_button_get_value(GTK_SPIN_BUTTON(md.pref_size));
++	gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(md.pref_bg), &md.background);
++	save_config();
++
++	place_tab(TRUE);
++	schedule_update(0);
++}
++
++static GtkWidget *md_configure(GeanyPlugin *plugin, GtkDialog *dialog, gpointer data)
++{
++	GtkWidget *grid = gtk_grid_new();
++	GtkWidget *label, *button;
++	gchar *css_utf8, *hint;
++
++	gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
++	gtk_grid_set_column_spacing(GTK_GRID(grid), 12);
++	gtk_container_set_border_width(GTK_CONTAINER(grid), 6);
++
++	label = gtk_label_new(_("Show preview in:"));
++	gtk_widget_set_halign(label, GTK_ALIGN_START);
++	md.pref_pos = gtk_combo_box_text_new();
++	gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(md.pref_pos), _("Sidebar"));
++	gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(md.pref_pos), _("Message window"));
++	gtk_combo_box_set_active(GTK_COMBO_BOX(md.pref_pos), md.position);
++	gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 1, 1);
++	gtk_grid_attach(GTK_GRID(grid), md.pref_pos, 1, 0, 1, 1);
++
++	label = gtk_label_new(_("Base font size (pt):"));
++	gtk_widget_set_halign(label, GTK_ALIGN_START);
++	md.pref_size = gtk_spin_button_new_with_range(4, 72, 0.5);
++	gtk_spin_button_set_value(GTK_SPIN_BUTTON(md.pref_size), md.font_size);
++	gtk_grid_attach(GTK_GRID(grid), label, 0, 1, 1, 1);
++	gtk_grid_attach(GTK_GRID(grid), md.pref_size, 1, 1, 1, 1);
++
++	label = gtk_label_new(_("Background colour:"));
++	gtk_widget_set_halign(label, GTK_ALIGN_START);
++	md.pref_bg = gtk_color_button_new_with_rgba(&md.background);
++	gtk_grid_attach(GTK_GRID(grid), label, 0, 2, 1, 1);
++	gtk_grid_attach(GTK_GRID(grid), md.pref_bg, 1, 2, 1, 1);
++
++	button = gtk_button_new_with_mnemonic(_("_Edit Stylesheet"));
++	css_utf8 = utils_get_utf8_from_locale(md.css_file);
++	hint = g_strdup_printf(_("Opens %s in Geany. Saving it updates the preview."), css_utf8);
++	gtk_widget_set_tooltip_text(button, hint);
++	g_free(hint);
++	g_free(css_utf8);
++	g_signal_connect(button, "clicked", G_CALLBACK(on_edit_css_clicked), NULL);
++	gtk_grid_attach(GTK_GRID(grid), button, 0, 3, 2, 1);
++
++	g_signal_connect(dialog, "response", G_CALLBACK(on_configure_response), NULL);
++	gtk_widget_show_all(grid);
++	return grid;
++}
++
++
++/* ------------------------------------------------------------------ */
++/* Plugin entry points                                                 */
++/* ------------------------------------------------------------------ */
++
++static gboolean md_init(GeanyPlugin *plugin, gpointer data)
++{
++	gchar *dir;
++	GtkWidget *viewport;
++
++	md.plugin = plugin;
++	md.shown_doc_id = -1;
++	md.quads = g_new(fz_quad, MAX_SEL_QUADS);
++	md.scroll_pos = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
++
++	md.ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
++	if (!md.ctx)
++	{
++		g_warning("Markdown preview: cannot create MuPDF context");
++		return FALSE;
++	}
++	fz_set_warning_callback(md.ctx, on_fz_message, NULL);
++	fz_set_error_callback(md.ctx, on_fz_message, NULL);
++	fz_register_document_handlers(md.ctx);
++
++	dir = g_build_filename(plugin->geany_data->app->configdir, "plugins", PLUGIN_NAME, NULL);
++	md.conf_file = g_build_filename(dir, PLUGIN_NAME ".conf", NULL);
++	md.css_file = g_build_filename(dir, "preview.css", NULL);
++	g_free(dir);
++	load_config();
++
++	md.darea = gtk_drawing_area_new();
++	gtk_widget_set_can_focus(md.darea, TRUE);
++	gtk_widget_add_events(md.darea, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
++		GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK);
++	g_signal_connect(md.darea, "draw", G_CALLBACK(on_draw), NULL);
++	g_signal_connect(md.darea, "button-press-event", G_CALLBACK(on_button_press), NULL);
++	g_signal_connect(md.darea, "button-release-event", G_CALLBACK(on_button_release), NULL);
++	g_signal_connect(md.darea, "motion-notify-event", G_CALLBACK(on_motion), NULL);
++	g_signal_connect(md.darea, "map", G_CALLBACK(on_darea_map), NULL);
++
++	md.scrolled = gtk_scrolled_window_new(NULL, NULL);
++	/* Geany may destroy the notebook (and us) before calling cleanup */
++	g_object_add_weak_pointer(G_OBJECT(md.scrolled), (gpointer *) &md.scrolled);
++	/* vertical bar always present, so it can't flip the width back and forth */
++	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(md.scrolled),
++		GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
++	gtk_container_add(GTK_CONTAINER(md.scrolled), md.darea);
++	viewport = gtk_bin_get_child(GTK_BIN(md.scrolled));
++	/* Giving the drawing area keyboard focus (a click) makes the scrolled
++	 * window scroll the focused widget into view, i.e. back to the top of
++	 * the document. Point its focus adjustments at throw-away ones. */
++	gtk_container_set_focus_vadjustment(GTK_CONTAINER(viewport),
++		gtk_adjustment_new(0, 0, 1, 1, 1, 1));
++	gtk_container_set_focus_hadjustment(GTK_CONTAINER(viewport),
++		gtk_adjustment_new(0, 0, 1, 1, 1, 1));
++	g_signal_connect(viewport, "size-allocate", G_CALLBACK(on_viewport_size_allocate), NULL);
++	g_signal_connect(vadj(), "changed", G_CALLBACK(on_vadj_changed), NULL);
++
++	place_tab(TRUE);
++
++#define CONNECT(sig, cb) plugin_signal_connect(plugin, NULL, (sig), TRUE, G_CALLBACK(cb), NULL)
++	CONNECT("editor-notify", on_editor_notify);
++	CONNECT("document-activate", on_document_signal);
++	CONNECT("document-new", on_document_signal);
++	CONNECT("document-open", on_document_signal);
++	CONNECT("document-reload", on_document_signal);
++	CONNECT("document-filetype-set", on_document_filetype_set);
++	CONNECT("document-save", on_document_save);
++	CONNECT("document-close", on_document_close);
++#undef CONNECT
++	plugin_signal_connect(plugin, NULL, "key-press", FALSE, G_CALLBACK(on_key_press), NULL);
++	plugin_signal_connect(plugin, G_OBJECT(gtk_widget_get_screen(md.darea)), "notify::resolution",
++		FALSE, G_CALLBACK(on_resolution_changed), NULL);
++	g_signal_connect(md.darea, "notify::scale-factor", G_CALLBACK(on_scale_factor_changed), NULL);
++
++	schedule_update(0);
++	return TRUE;
++}
++
++static void md_cleanup(GeanyPlugin *plugin, gpointer data)
++{
++	if (md.update_source)
++		g_source_remove(md.update_source);
++	if (md.relayout_source)
++		g_source_remove(md.relayout_source);
++	if (md.scroll_clear_source)
++		g_source_remove(md.scroll_clear_source);
++
++	if (md.scrolled)
++	{
++		g_object_remove_weak_pointer(G_OBJECT(md.scrolled), (gpointer *) &md.scrolled);
++		gtk_widget_destroy(md.scrolled);
++	}
++
++	if (md.ctx)
++	{
++		drop_document();
++		fz_drop_context(md.ctx);
++	}
++	if (md.scroll_pos)
++		g_hash_table_destroy(md.scroll_pos);
++	g_free(md.quads);
++	g_free(md.base_dir);
++	g_free(md.pending_anchor);
++	g_free(md.conf_file);
++	g_free(md.css_file);
++	g_free(md.css);
++	memset(&md, 0, sizeof md);
++}
++
++G_MODULE_EXPORT
++void geany_load_module(GeanyPlugin *plugin)
++{
++	main_locale_init(LOCALEDIR, GETTEXT_PACKAGE);
++
++	plugin->info->name = _("Markdown Preview (MuPDF)");
++	plugin->info->description = _("Live Markdown preview in the sidebar, rendered with MuPDF");
++	plugin->info->version = "0.4";
++	plugin->info->author = "sjukfan@gmail.com";
++
++	plugin->funcs->init = md_init;
++	plugin->funcs->cleanup = md_cleanup;
++	plugin->funcs->configure = md_configure;
++
++	/* MuPDF's cmark-gfm registers an atexit() handler; the code must stay
++	 * loaded even if the plugin is disabled. */
++	plugin_module_make_resident(plugin);
++
++	GEANY_PLUGIN_REGISTER(plugin, 225);
++}
+diff --git a/po/POTFILES.in b/po/POTFILES.in
+index 983ad9e..00e9810 100644
+--- a/po/POTFILES.in
++++ b/po/POTFILES.in
+@@ -193,6 +193,9 @@ lsp/src/lsp-utils.c
+ markdown/src/conf.c
+ markdown/src/plugin.c
+ 
++# mdpreview
++mdpreview/src/mdpreview.c
++
+ # Overview
+ overview/overview/overviewcolor.c
+ overview/overview/overviewplugin.c
