@@ -8,8 +8,6 @@ Live Markdown preview for Geany, shown in the sidebar. Rendered by MuPDF instead
 </picture>
 Written with assistance from Claude (Anthropic).
 
-&nbsp;
-
 <p align="center">
   <img src="images/markdown-preview-mupdf.png" alt="Markdown Preview (MuPDF) in Geany" width="600">
 </p>
@@ -68,11 +66,13 @@ the build fails. Use `git clone --recurse-submodules`, or run
 
 ```sh
 cd mupdf
-make -j$(nproc) HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU -DTOFU_CJK" libs
+make -j$(nproc) HAVE_X11=no HAVE_GLUT=no HAVE_CURL=no XCFLAGS="-fPIC -DTOFU_CJK" libs
 ```
 
-`-fPIC` is required because a Geany plugin is a shared library. `-DTOFU -DTOFU_CJK` leaves out
-MuPDF's large built-in fonts; drop them if you need CJK or other unusual glyphs.
+`-fPIC` is required because a Geany plugin is a shared library. `-DTOFU_CJK` leaves out
+MuPDF's large built-in CJK fonts; drop it if you need Chinese, Japanese or Korean glyphs.
+The Noto symbol fonts stay in, so characters such as ▶ are drawn. That makes the plugin about
+19 MB; adding `-DTOFU` would shrink it to about 10 MB, but symbols outside the basic fonts would then show as empty boxes.
 Warnings from `thirdparty/extract` can be ignored.
 
 MuPDF's makefile does not notice a change of `XCFLAGS`. If you built MuPDF before without `-fPIC`, linking the plugin
