@@ -4,6 +4,9 @@ mdpreview 0.4 (2026-10-28)
    a line. Paragraphs, headings, list items and quotes are copied as one
    line each, and wrapped lines in code blocks are rejoined; table cells
    and real line breaks keep theirs.
+ * MuPDF is now built with its Noto symbol fonts (-DTOFU_CJK instead of
+   -DTOFU -DTOFU_CJK), so characters such as U+25B6 are drawn instead of
+   empty boxes. The plugin grows from about 10 MB to 19 MB.
 
 mdpreview 0.3 (2026-10-28)
 
