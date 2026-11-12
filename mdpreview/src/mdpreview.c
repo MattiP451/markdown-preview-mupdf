@@ -1590,5 +1590,6 @@ void geany_load_module(GeanyPlugin *plugin)
 	 * loaded even if the plugin is disabled. */
 	plugin_module_make_resident(plugin);
 
-	GEANY_PLUGIN_REGISTER(plugin, 225);
+	/* API 235: utils_get_real_path() is @since 1.32 (API 235). */
+	GEANY_PLUGIN_REGISTER(plugin, 235);
 }
