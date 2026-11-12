@@ -775,7 +775,7 @@ static void update_selection(void)
  * of the code. Anything unclear keeps the newline, so the worst case is the
  * old behaviour. */
 #define WRAP_MARK_BASE  0xF0000   /* Unicode plane-15 private use area */
-#define WRAP_MARK_MAX   0x8000
+#define WRAP_MARK_MAX   0x10000
 
 typedef struct { fz_stext_char *ch; int c; } wrap_mark;
 
@@ -881,7 +881,7 @@ static gchar *selection_text(void)
 		{
 			wrap_mark m;
 			m.ch = line->last_char;
-			if (m.ch && m.ch->c > 32 && m.ch->c < WRAP_MARK_MAX - 16 &&
+			if (m.ch && m.ch->c > 32 && m.ch->c < WRAP_MARK_MAX - 2 &&
 			    is_soft_wrap(line, line->next, right, mono_right))
 			{
 				m.c = m.ch->c;
@@ -911,18 +911,23 @@ static gchar *selection_text(void)
 		while (*p)
 		{
 			gunichar u = g_utf8_get_char(p);
+			gboolean hangul;
 			p = g_utf8_next_char(p);
 			if (u >= WRAP_MARK_BASE && u < WRAP_MARK_BASE + WRAP_MARK_MAX)
 			{
 				u -= WRAP_MARK_BASE;
+				hangul = (u >= 0x1100 && u <= 0x11FF) || (u >= 0x3130 && u <= 0x318F) ||
+				         (u >= 0xA960 && u <= 0xA97F) || (u >= 0xAC00 && u <= 0xD7FF) ||
+				         (u >= 0xFFA0 && u <= 0xFFDC);
 				g_string_append_unichar(out, u);
 				if (*p == '\n')
 				{
 					p++;
-					/* no space after a hyphen or slash, or between CJK characters */
+					/* no space after a hyphen or slash, or between CJK characters
+					 * (but Hangul is space-separated, so it keeps the space) */
 					if (u != '-' && u != '/' && u != 0x2010 && u != 0x2011 && u != 0x2013 &&
-					    !(u >= 0x2E80 && u <= 0xD7AF) && !(u >= 0xF900 && u <= 0xFAFF) &&
-					    !(u >= 0xFF00 && u <= 0xFFEF))
+					    (hangul || (!(u >= 0x2E80 && u <= 0xD7AF) && !(u >= 0xF900 && u <= 0xFAFF) &&
+					    !(u >= 0xFF00 && u <= 0xFFEF))))
 						g_string_append_c(out, ' ');
 				}
 			}
