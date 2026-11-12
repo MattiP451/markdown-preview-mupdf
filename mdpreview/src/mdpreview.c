@@ -1402,7 +1402,7 @@ static void on_edit_css_clicked(GtkButton *button, gpointer data)
 		g_free(dir);
 	}
 	document_open_file(md.css_file, FALSE, NULL, NULL);
-	gtk_dialog_response(GTK_DIALOG(gtk_widget_get_toplevel(GTK_WIDGET(button))), GTK_RESPONSE_CANCEL);
+	gtk_dialog_response(GTK_DIALOG(gtk_widget_get_toplevel(GTK_WIDGET(button))), GTK_RESPONSE_OK);
 }
 
 static void on_configure_response(GtkDialog *dialog, gint response, gpointer data)

@@ -3372,7 +3372,7 @@ index 0000000..9d819f2
 +include $(top_srcdir)/build/cppcheck.mk
 diff --git a/mdpreview/src/mdpreview.c b/mdpreview/src/mdpreview.c
 new file mode 100644
-index 0000000..a9c2a39
+index 0000000..1dab862
 --- /dev/null
 +++ b/mdpreview/src/mdpreview.c
 @@ -0,0 +1,1604 @@
@@ -4780,7 +4780,7 @@ index 0000000..a9c2a39
 +		g_free(dir);
 +	}
 +	document_open_file(md.css_file, FALSE, NULL, NULL);
-+	gtk_dialog_response(GTK_DIALOG(gtk_widget_get_toplevel(GTK_WIDGET(button))), GTK_RESPONSE_CANCEL);
++	gtk_dialog_response(GTK_DIALOG(gtk_widget_get_toplevel(GTK_WIDGET(button))), GTK_RESPONSE_OK);
 +}
 +
 +static void on_configure_response(GtkDialog *dialog, gint response, gpointer data)
