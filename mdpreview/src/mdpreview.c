@@ -1311,6 +1311,8 @@ static void load_config(void)
 	if (g_key_file_load_from_file(kf, md.conf_file, G_KEY_FILE_NONE, NULL))
 	{
 		md.position = utils_get_setting_integer(kf, PLUGIN_NAME, "position", POS_SIDEBAR);
+		if (md.position != POS_SIDEBAR && md.position != POS_MSGWIN)
+			md.position = POS_SIDEBAR;
 		md.font_size = g_key_file_get_double(kf, PLUGIN_NAME, "font_size", NULL);
 		if (md.font_size < 4 || md.font_size > 72)
 			md.font_size = 11.0;
