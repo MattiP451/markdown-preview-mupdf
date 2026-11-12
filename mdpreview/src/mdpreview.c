@@ -25,6 +25,8 @@
 /* Fallbacks for the standalone build (no config.h) */
 #ifndef GETTEXT_PACKAGE
 # define GETTEXT_PACKAGE "geany-plugins"
+/* Do not re-point the shared geany-plugins catalog at an empty dir */
+# define MDP_NO_GETTEXT_INIT
 #endif
 #ifndef LOCALEDIR
 # define LOCALEDIR ""
@@ -1566,7 +1568,9 @@ static void md_cleanup(GeanyPlugin *plugin, gpointer data)
 G_MODULE_EXPORT
 void geany_load_module(GeanyPlugin *plugin)
 {
+#ifndef MDP_NO_GETTEXT_INIT
 	main_locale_init(LOCALEDIR, GETTEXT_PACKAGE);
+#endif
 
 	plugin->info->name = _("Markdown Preview (MuPDF)");
 	plugin->info->description = _("Live Markdown preview in the sidebar, rendered with MuPDF");
