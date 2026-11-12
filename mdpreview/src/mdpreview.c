@@ -567,7 +567,8 @@ static gboolean on_editor_notify(GObject *obj, GeanyEditor *editor,
 {
 	if (nt->nmhdr.code == SCN_MODIFIED && nt->length > 0 &&
 		(nt->modificationType & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)) &&
-		editor->document == document_get_current())
+		editor->document == document_get_current() &&
+		is_markdown_doc(editor->document))
 	{
 		schedule_update(UPDATE_DELAY_MS);
 	}
