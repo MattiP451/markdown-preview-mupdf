@@ -7,7 +7,7 @@
 #   make -f Makefile.standalone MUPDF=/path/to/mupdf
 #   make -f Makefile.standalone MUPDF=/path/to/mupdf install   # into ~/.config/geany/plugins
 
-MUPDF     ?= /tmp/mupdf
+MUPDF     ?= ../../mupdf
 MUPDF_LIB ?= $(MUPDF)/build/release
 PLUGINDIR ?= $(HOME)/.config/geany/plugins
 
@@ -15,16 +15,19 @@ CC      ?= cc
 CFLAGS  ?= -O2 -g -Wall
 PKGS     = geany gtk+-3.0
 
-PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
-PKG_LIBS   := $(shell pkg-config --libs $(PKGS))
+PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS) 2>/dev/null)
+PKG_LIBS   := $(shell pkg-config --libs $(PKGS) 2>/dev/null)
 
-mdpreview.so: src/mdpreview.c
-	@test -f $(MUPDF_LIB)/libmupdf.a || { echo "*** $(MUPDF_LIB)/libmupdf.a not found - build MuPDF first, or set MUPDF=..."; exit 1; }
-	$(CC) $(CFLAGS) -fPIC -shared -o $@ $< \
+mdpreview.so: src/mdpreview.c $(MUPDF_LIB)/libmupdf.a
+	@pkg-config --exists $(PKGS) || { echo "*** pkg-config cannot find $(PKGS) - install the Geany and GTK 3 development files"; exit 1; }
+	$(CC) $(CPPFLAGS) -DG_LOG_DOMAIN=\"MDPreview\" $(CFLAGS) -fPIC -shared -o $@ $< \
 		$(PKG_CFLAGS) -I$(MUPDF)/include \
 		$(MUPDF_LIB)/libmupdf.a $(MUPDF_LIB)/libmupdf-third.a \
-		$(PKG_LIBS) -lm -lpthread \
+		$(LDFLAGS) $(PKG_LIBS) -lm -lpthread \
 		-Wl,--exclude-libs,ALL -Wl,-z,defs
+
+$(MUPDF_LIB)/libmupdf.a:
+	@test -f $@ || { echo "*** $@ not found - build MuPDF first, or set MUPDF=..."; exit 1; }
 
 install: mdpreview.so
 	mkdir -p $(PLUGINDIR)
