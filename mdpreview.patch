@@ -508,10 +508,10 @@ index 0000000..c0df77a
 +include $(top_srcdir)/build/vars.build.mk
 diff --git a/mdpreview/Makefile.standalone b/mdpreview/Makefile.standalone
 new file mode 100644
-index 0000000..369c693
+index 0000000..48401a6
 --- /dev/null
 +++ b/mdpreview/Makefile.standalone
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,42 @@
 +# Build the plugin on its own, against the installed Geany and a MuPDF
 +# source tree that has been built with:
 +#
@@ -521,7 +521,7 @@ index 0000000..369c693
 +#   make -f Makefile.standalone MUPDF=/path/to/mupdf
 +#   make -f Makefile.standalone MUPDF=/path/to/mupdf install   # into ~/.config/geany/plugins
 +
-+MUPDF     ?= /tmp/mupdf
++MUPDF     ?= ../../mupdf
 +MUPDF_LIB ?= $(MUPDF)/build/release
 +PLUGINDIR ?= $(HOME)/.config/geany/plugins
 +
@@ -529,16 +529,19 @@ index 0000000..369c693
 +CFLAGS  ?= -O2 -g -Wall
 +PKGS     = geany gtk+-3.0
 +
-+PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
-+PKG_LIBS   := $(shell pkg-config --libs $(PKGS))
++PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS) 2>/dev/null)
++PKG_LIBS   := $(shell pkg-config --libs $(PKGS) 2>/dev/null)
 +
-+mdpreview.so: src/mdpreview.c
-+	@test -f $(MUPDF_LIB)/libmupdf.a || { echo "*** $(MUPDF_LIB)/libmupdf.a not found - build MuPDF first, or set MUPDF=..."; exit 1; }
-+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $< \
++mdpreview.so: src/mdpreview.c $(MUPDF_LIB)/libmupdf.a
++	@pkg-config --exists $(PKGS) || { echo "*** pkg-config cannot find $(PKGS) - install the Geany and GTK 3 development files"; exit 1; }
++	$(CC) $(CPPFLAGS) -DG_LOG_DOMAIN=\"MDPreview\" $(CFLAGS) -fPIC -shared -o $@ $< \
 +		$(PKG_CFLAGS) -I$(MUPDF)/include \
 +		$(MUPDF_LIB)/libmupdf.a $(MUPDF_LIB)/libmupdf-third.a \
-+		$(PKG_LIBS) -lm -lpthread \
++		$(LDFLAGS) $(PKG_LIBS) -lm -lpthread \
 +		-Wl,--exclude-libs,ALL -Wl,-z,defs
++
++$(MUPDF_LIB)/libmupdf.a:
++	@test -f $@ || { echo "*** $@ not found - build MuPDF first, or set MUPDF=..."; exit 1; }
 +
 +install: mdpreview.so
 +	mkdir -p $(PLUGINDIR)
@@ -690,10 +693,10 @@ index 0000000..db7df68
 +data bundled in MuPDF: packaging/THIRD-PARTY-NOTICES.txt.
 diff --git a/mdpreview/make-deb.sh b/mdpreview/make-deb.sh
 new file mode 100755
-index 0000000..74461b3
+index 0000000..136715c
 --- /dev/null
 +++ b/mdpreview/make-deb.sh
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,112 @@
 +#!/bin/sh
 +# Build a .deb of the Markdown Preview (MuPDF) Geany plugin.
 +#
@@ -708,6 +711,12 @@ index 0000000..74461b3
 +# requires you to say where the corresponding source can be found.
 +# Without a git checkout, set MUPDF_VERSION and MUPDF_COMMIT yourself.
 +set -e
++# A user-supplied relative MUPDF is relative to the caller's cwd, so make it
++# absolute before the cd below (the default stays relative to this script).
++case ${MUPDF-} in
++	""|/*) ;;
++	*) MUPDF=$PWD/$MUPDF ;;
++esac
 +cd "$(dirname "$0")"
 +
 +PKG=geany-plugin-mdpreview
@@ -727,7 +736,7 @@ index 0000000..74461b3
 +if test -z "$MUPDF_VERSION" && test -f "$MUPDF/include/mupdf/fitz/version.h"; then
 +	MUPDF_VERSION=$(sed -n 's/^#define FZ_VERSION "\(.*\)"/\1/p' "$MUPDF/include/mupdf/fitz/version.h")
 +fi
-+if test -z "$MUPDF_COMMIT" && test -d "$MUPDF/.git"; then
++if test -z "$MUPDF_COMMIT" && p=$(git -C "$MUPDF" rev-parse --show-prefix 2>/dev/null) && test -z "$p"; then
 +	MUPDF_COMMIT=$(git -C "$MUPDF" rev-parse HEAD)
 +	if test -n "$(git -C "$MUPDF" status --porcelain --untracked-files=no 2>/dev/null)"; then
 +		die "$MUPDF has local changes. The AGPL source offer must match what was built; commit them or build a clean checkout (and publish the changes)."
@@ -741,6 +750,7 @@ index 0000000..74461b3
 +LIBDIR=$(pkg-config --variable=libdir geany 2>/dev/null || true)
 +test -n "$LIBDIR" || LIBDIR=/usr/lib/$(gcc -print-multiarch)
 +GEANY_VER=$(dpkg-query -W -f='${Version}' geany | sed 's/-[^-]*$//')
++test -n "$GEANY_VER" || die "cannot determine the Geany version: is Geany installed as a Debian package? (dpkg-query -W geany failed)"
 +# Debian's geany package "Provides: geany-abi-NNNNN"; a plugin only loads
 +# into a Geany with the same ABI, so depend on exactly that.
 +ABI=$(dpkg-query -W -f='${Provides}' geany | tr ',' '\n' | grep -o 'geany-abi-[0-9]*' || true)
@@ -3321,7 +3331,7 @@ index 0000000..5476583
 +echo "Copyright Artifex Software. Part of MuPDF, distributed under the AGPL-3.0-or-later."
 diff --git a/mdpreview/packaging/make-mupdf-source.sh b/mdpreview/packaging/make-mupdf-source.sh
 new file mode 100644
-index 0000000..41852dd
+index 0000000..becdca4
 --- /dev/null
 +++ b/mdpreview/packaging/make-mupdf-source.sh
 @@ -0,0 +1,14 @@
@@ -3336,7 +3346,7 @@ index 0000000..41852dd
 +COMMIT=$(git -C "$M" rev-parse HEAD | cut -c1-8)
 +OUT=$PWD/mupdf-$VER-$COMMIT-source.tar.xz
 +D=$(cd "$M" && pwd)
-+tar -C "$(dirname "$D")" --exclude='*/build' --exclude='.git' --transform "s,^$(basename "$D"),mupdf-$VER-$COMMIT," \
++tar -C "$(dirname "$D")" --anchored --no-wildcards --exclude="$(basename "$D")/build" --no-anchored --wildcards --exclude='.git' --transform "s,^$(basename "$D"),mupdf-$VER-$COMMIT," \
 +    -cJf "$OUT" "$(basename "$D")"
 +echo "$OUT"
 diff --git a/mdpreview/src/Makefile.am b/mdpreview/src/Makefile.am
@@ -3362,10 +3372,10 @@ index 0000000..9d819f2
 +include $(top_srcdir)/build/cppcheck.mk
 diff --git a/mdpreview/src/mdpreview.c b/mdpreview/src/mdpreview.c
 new file mode 100644
-index 0000000..b3ee87a
+index 0000000..a9c2a39
 --- /dev/null
 +++ b/mdpreview/src/mdpreview.c
-@@ -0,0 +1,1585 @@
+@@ -0,0 +1,1604 @@
 +/*
 + * mdpreview.c - Markdown preview for Geany, rendered with MuPDF
 + *
@@ -3393,6 +3403,8 @@ index 0000000..b3ee87a
 +/* Fallbacks for the standalone build (no config.h) */
 +#ifndef GETTEXT_PACKAGE
 +# define GETTEXT_PACKAGE "geany-plugins"
++/* Do not re-point the shared geany-plugins catalog at an empty dir */
++# define MDP_NO_GETTEXT_INIT
 +#endif
 +#ifndef LOCALEDIR
 +# define LOCALEDIR ""
@@ -3408,6 +3420,9 @@ index 0000000..b3ee87a
 +#endif
 +#if !FZ_ENABLE_MD
 +# error "MuPDF was built without Markdown support (FZ_ENABLE_MD=0)"
++#endif
++#if G_BYTE_ORDER == G_BIG_ENDIAN
++# error "Big-endian hosts are not supported: the BGRA pixmap only matches cairo's ARGB32 on little-endian"
 +#endif
 +
 +#define PLUGIN_NAME     "mdpreview"
@@ -3933,7 +3948,8 @@ index 0000000..b3ee87a
 +{
 +	if (nt->nmhdr.code == SCN_MODIFIED && nt->length > 0 &&
 +		(nt->modificationType & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)) &&
-+		editor->document == document_get_current())
++		editor->document == document_get_current() &&
++		is_markdown_doc(editor->document))
 +	{
 +		schedule_update(UPDATE_DELAY_MS);
 +	}
@@ -4141,7 +4157,7 @@ index 0000000..b3ee87a
 + * of the code. Anything unclear keeps the newline, so the worst case is the
 + * old behaviour. */
 +#define WRAP_MARK_BASE  0xF0000   /* Unicode plane-15 private use area */
-+#define WRAP_MARK_MAX   0x8000
++#define WRAP_MARK_MAX   0x10000
 +
 +typedef struct { fz_stext_char *ch; int c; } wrap_mark;
 +
@@ -4247,7 +4263,7 @@ index 0000000..b3ee87a
 +		{
 +			wrap_mark m;
 +			m.ch = line->last_char;
-+			if (m.ch && m.ch->c > 32 && m.ch->c < WRAP_MARK_MAX - 16 &&
++			if (m.ch && m.ch->c > 32 && m.ch->c < WRAP_MARK_MAX - 2 &&
 +			    is_soft_wrap(line, line->next, right, mono_right))
 +			{
 +				m.c = m.ch->c;
@@ -4277,18 +4293,23 @@ index 0000000..b3ee87a
 +		while (*p)
 +		{
 +			gunichar u = g_utf8_get_char(p);
++			gboolean hangul;
 +			p = g_utf8_next_char(p);
 +			if (u >= WRAP_MARK_BASE && u < WRAP_MARK_BASE + WRAP_MARK_MAX)
 +			{
 +				u -= WRAP_MARK_BASE;
++				hangul = (u >= 0x1100 && u <= 0x11FF) || (u >= 0x3130 && u <= 0x318F) ||
++				         (u >= 0xA960 && u <= 0xA97F) || (u >= 0xAC00 && u <= 0xD7FF) ||
++				         (u >= 0xFFA0 && u <= 0xFFDC);
 +				g_string_append_unichar(out, u);
 +				if (*p == '\n')
 +				{
 +					p++;
-+					/* no space after a hyphen or slash, or between CJK characters */
++					/* no space after a hyphen or slash, or between CJK characters
++					 * (but Hangul is space-separated, so it keeps the space) */
 +					if (u != '-' && u != '/' && u != 0x2010 && u != 0x2011 && u != 0x2013 &&
-+					    !(u >= 0x2E80 && u <= 0xD7AF) && !(u >= 0xF900 && u <= 0xFAFF) &&
-+					    !(u >= 0xFF00 && u <= 0xFFEF))
++					    (hangul || (!(u >= 0x2E80 && u <= 0xD7AF) && !(u >= 0xF900 && u <= 0xFAFF) &&
++					    !(u >= 0xFF00 && u <= 0xFFEF))))
 +						g_string_append_c(out, ' ');
 +				}
 +			}
@@ -4382,7 +4403,7 @@ index 0000000..b3ee87a
 +			g_free(md.pending_anchor);
 +			md.pending_anchor = NULL;
 +		}
-+		else if (doc && !is_markdown_doc(doc))
++		else if (!doc || !is_markdown_doc(doc))
 +		{
 +			g_free(md.pending_anchor);
 +			md.pending_anchor = NULL;
@@ -4671,6 +4692,8 @@ index 0000000..b3ee87a
 +	if (g_key_file_load_from_file(kf, md.conf_file, G_KEY_FILE_NONE, NULL))
 +	{
 +		md.position = utils_get_setting_integer(kf, PLUGIN_NAME, "position", POS_SIDEBAR);
++		if (md.position != POS_SIDEBAR && md.position != POS_MSGWIN)
++			md.position = POS_SIDEBAR;
 +		md.font_size = g_key_file_get_double(kf, PLUGIN_NAME, "font_size", NULL);
 +		if (md.font_size < 4 || md.font_size > 72)
 +			md.font_size = 11.0;
@@ -4829,11 +4852,10 @@ index 0000000..b3ee87a
 +{
 +	gchar *dir;
 +	GtkWidget *viewport;
++	GtkAdjustment *focus_adj;
 +
 +	md.plugin = plugin;
 +	md.shown_doc_id = -1;
-+	md.quads = g_new(fz_quad, MAX_SEL_QUADS);
-+	md.scroll_pos = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
 +
 +	md.ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
 +	if (!md.ctx)
@@ -4841,6 +4863,8 @@ index 0000000..b3ee87a
 +		g_warning("Markdown preview: cannot create MuPDF context");
 +		return FALSE;
 +	}
++	md.quads = g_new(fz_quad, MAX_SEL_QUADS);
++	md.scroll_pos = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
 +	fz_set_warning_callback(md.ctx, on_fz_message, NULL);
 +	fz_set_error_callback(md.ctx, on_fz_message, NULL);
 +	fz_register_document_handlers(md.ctx);
@@ -4872,10 +4896,12 @@ index 0000000..b3ee87a
 +	/* Giving the drawing area keyboard focus (a click) makes the scrolled
 +	 * window scroll the focused widget into view, i.e. back to the top of
 +	 * the document. Point its focus adjustments at throw-away ones. */
-+	gtk_container_set_focus_vadjustment(GTK_CONTAINER(viewport),
-+		gtk_adjustment_new(0, 0, 1, 1, 1, 1));
-+	gtk_container_set_focus_hadjustment(GTK_CONTAINER(viewport),
-+		gtk_adjustment_new(0, 0, 1, 1, 1, 1));
++	focus_adj = g_object_ref_sink(gtk_adjustment_new(0, 0, 1, 1, 1, 1));
++	gtk_container_set_focus_vadjustment(GTK_CONTAINER(viewport), focus_adj);
++	g_object_unref(focus_adj);
++	focus_adj = g_object_ref_sink(gtk_adjustment_new(0, 0, 1, 1, 1, 1));
++	gtk_container_set_focus_hadjustment(GTK_CONTAINER(viewport), focus_adj);
++	g_object_unref(focus_adj);
 +	g_signal_connect(viewport, "size-allocate", G_CALLBACK(on_viewport_size_allocate), NULL);
 +	g_signal_connect(vadj(), "changed", G_CALLBACK(on_vadj_changed), NULL);
 +
@@ -4934,7 +4960,9 @@ index 0000000..b3ee87a
 +G_MODULE_EXPORT
 +void geany_load_module(GeanyPlugin *plugin)
 +{
++#ifndef MDP_NO_GETTEXT_INIT
 +	main_locale_init(LOCALEDIR, GETTEXT_PACKAGE);
++#endif
 +
 +	plugin->info->name = _("Markdown Preview (MuPDF)");
 +	plugin->info->description = _("Live Markdown preview in the sidebar, rendered with MuPDF");
@@ -4949,7 +4977,8 @@ index 0000000..b3ee87a
 +	 * loaded even if the plugin is disabled. */
 +	plugin_module_make_resident(plugin);
 +
-+	GEANY_PLUGIN_REGISTER(plugin, 225);
++	/* API 235: utils_get_real_path() is @since 1.32 (API 235). */
++	GEANY_PLUGIN_REGISTER(plugin, 235);
 +}
 diff --git a/po/POTFILES.in b/po/POTFILES.in
 index 983ad9e..00e9810 100644
