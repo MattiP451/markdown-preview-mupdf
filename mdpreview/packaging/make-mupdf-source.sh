@@ -9,6 +9,6 @@ VER=$(sed -n 's/^#define FZ_VERSION "\(.*\)"/\1/p' "$M/include/mupdf/fitz/versio
 COMMIT=$(git -C "$M" rev-parse HEAD | cut -c1-8)
 OUT=$PWD/mupdf-$VER-$COMMIT-source.tar.xz
 D=$(cd "$M" && pwd)
-tar -C "$(dirname "$D")" --exclude='*/build' --exclude='.git' --transform "s,^$(basename "$D"),mupdf-$VER-$COMMIT," \
+tar -C "$(dirname "$D")" --anchored --no-wildcards --exclude="$(basename "$D")/build" --no-anchored --wildcards --exclude='.git' --transform "s,^$(basename "$D"),mupdf-$VER-$COMMIT," \
     -cJf "$OUT" "$(basename "$D")"
 echo "$OUT"
