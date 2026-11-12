@@ -12,6 +12,12 @@
 # requires you to say where the corresponding source can be found.
 # Without a git checkout, set MUPDF_VERSION and MUPDF_COMMIT yourself.
 set -e
+# A user-supplied relative MUPDF is relative to the caller's cwd, so make it
+# absolute before the cd below (the default stays relative to this script).
+case ${MUPDF-} in
+	""|/*) ;;
+	*) MUPDF=$PWD/$MUPDF ;;
+esac
 cd "$(dirname "$0")"
 
 PKG=geany-plugin-mdpreview
@@ -31,7 +37,7 @@ done
 if test -z "$MUPDF_VERSION" && test -f "$MUPDF/include/mupdf/fitz/version.h"; then
 	MUPDF_VERSION=$(sed -n 's/^#define FZ_VERSION "\(.*\)"/\1/p' "$MUPDF/include/mupdf/fitz/version.h")
 fi
-if test -z "$MUPDF_COMMIT" && test -d "$MUPDF/.git"; then
+if test -z "$MUPDF_COMMIT" && p=$(git -C "$MUPDF" rev-parse --show-prefix 2>/dev/null) && test -z "$p"; then
 	MUPDF_COMMIT=$(git -C "$MUPDF" rev-parse HEAD)
 	if test -n "$(git -C "$MUPDF" status --porcelain --untracked-files=no 2>/dev/null)"; then
 		die "$MUPDF has local changes. The AGPL source offer must match what was built; commit them or build a clean checkout (and publish the changes)."
@@ -45,6 +51,7 @@ ARCH=$(dpkg --print-architecture)
 LIBDIR=$(pkg-config --variable=libdir geany 2>/dev/null || true)
 test -n "$LIBDIR" || LIBDIR=/usr/lib/$(gcc -print-multiarch)
 GEANY_VER=$(dpkg-query -W -f='${Version}' geany | sed 's/-[^-]*$//')
+test -n "$GEANY_VER" || die "cannot determine the Geany version: is Geany installed as a Debian package? (dpkg-query -W geany failed)"
 # Debian's geany package "Provides: geany-abi-NNNNN"; a plugin only loads
 # into a Geany with the same ABI, so depend on exactly that.
 ABI=$(dpkg-query -W -f='${Provides}' geany | tr ',' '\n' | grep -o 'geany-abi-[0-9]*' || true)
