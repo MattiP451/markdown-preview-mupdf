@@ -43,6 +43,9 @@
 #if !FZ_ENABLE_MD
 # error "MuPDF was built without Markdown support (FZ_ENABLE_MD=0)"
 #endif
+#if G_BYTE_ORDER == G_BIG_ENDIAN
+# error "Big-endian hosts are not supported: the BGRA pixmap only matches cairo's ARGB32 on little-endian"
+#endif
 
 #define PLUGIN_NAME     "mdpreview"
 #define PREVIEW_LABEL   _("Markdown")
