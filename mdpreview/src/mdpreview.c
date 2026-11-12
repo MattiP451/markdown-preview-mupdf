@@ -1469,11 +1469,10 @@ static gboolean md_init(GeanyPlugin *plugin, gpointer data)
 {
 	gchar *dir;
 	GtkWidget *viewport;
+	GtkAdjustment *focus_adj;
 
 	md.plugin = plugin;
 	md.shown_doc_id = -1;
-	md.quads = g_new(fz_quad, MAX_SEL_QUADS);
-	md.scroll_pos = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
 
 	md.ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
 	if (!md.ctx)
@@ -1481,6 +1480,8 @@ static gboolean md_init(GeanyPlugin *plugin, gpointer data)
 		g_warning("Markdown preview: cannot create MuPDF context");
 		return FALSE;
 	}
+	md.quads = g_new(fz_quad, MAX_SEL_QUADS);
+	md.scroll_pos = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
 	fz_set_warning_callback(md.ctx, on_fz_message, NULL);
 	fz_set_error_callback(md.ctx, on_fz_message, NULL);
 	fz_register_document_handlers(md.ctx);
@@ -1512,10 +1513,12 @@ static gboolean md_init(GeanyPlugin *plugin, gpointer data)
 	/* Giving the drawing area keyboard focus (a click) makes the scrolled
 	 * window scroll the focused widget into view, i.e. back to the top of
 	 * the document. Point its focus adjustments at throw-away ones. */
-	gtk_container_set_focus_vadjustment(GTK_CONTAINER(viewport),
-		gtk_adjustment_new(0, 0, 1, 1, 1, 1));
-	gtk_container_set_focus_hadjustment(GTK_CONTAINER(viewport),
-		gtk_adjustment_new(0, 0, 1, 1, 1, 1));
+	focus_adj = g_object_ref_sink(gtk_adjustment_new(0, 0, 1, 1, 1, 1));
+	gtk_container_set_focus_vadjustment(GTK_CONTAINER(viewport), focus_adj);
+	g_object_unref(focus_adj);
+	focus_adj = g_object_ref_sink(gtk_adjustment_new(0, 0, 1, 1, 1, 1));
+	gtk_container_set_focus_hadjustment(GTK_CONTAINER(viewport), focus_adj);
+	g_object_unref(focus_adj);
 	g_signal_connect(viewport, "size-allocate", G_CALLBACK(on_viewport_size_allocate), NULL);
 	g_signal_connect(vadj(), "changed", G_CALLBACK(on_vadj_changed), NULL);
 
