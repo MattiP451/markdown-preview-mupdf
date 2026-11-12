@@ -1016,7 +1016,7 @@ static void open_local_file(const gchar *path, const gchar *anchor)
 			g_free(md.pending_anchor);
 			md.pending_anchor = NULL;
 		}
-		else if (doc && !is_markdown_doc(doc))
+		else if (!doc || !is_markdown_doc(doc))
 		{
 			g_free(md.pending_anchor);
 			md.pending_anchor = NULL;
